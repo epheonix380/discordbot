@@ -1,4 +1,4 @@
-from nudenet import NudeClassifier
+from nudenet.classifier import Classifier as NudeClassifier
 import requests
 classifier = NudeClassifier()
 
