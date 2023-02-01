@@ -1,7 +1,10 @@
 import discord
 from commands.nsfw import handle_nsfw
+from dotenv import load_dotenv
+import os 
+load_dotenv()
 
-TOKEN = "ODQ1NjY4NTE0MzQxMTkxNzUw.GaqZCO.FuZ9F6hr32-9nXuyKA9DO5A4sNBzlluQJde58w"
+TOKEN = os.getenv("TOKEN")
 intents = discord.Intents.default()
 intents.message_content = True
 
