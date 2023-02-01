@@ -6,77 +6,40 @@
 #
 
 -i https://pypi.org/simple
-absl-py==1.4.0; python_full_version >= '3.6.0'
-aiohttp==3.8.3; python_full_version >= '3.6.0'
+aiohttp==3.8.3; python_version >= '3.6'
 aiosignal==1.3.1; python_version >= '3.7'
-astunparse==1.6.3
-async-timeout==4.0.2; python_full_version >= '3.6.0'
-attrs==22.2.0; python_full_version >= '3.6.0'
-cachetools==5.3.0; python_version ~= '3.7'
-certifi==2022.12.7; python_full_version >= '3.6.0'
-charset-normalizer==2.1.1; python_full_version >= '3.6.0'
+async-timeout==4.0.2; python_version >= '3.6'
+attrs==22.2.0; python_version >= '3.6'
+certifi==2022.12.7; python_version >= '3.6'
+charset-normalizer==2.1.1; python_version >= '3.6'
 coloredlogs==15.0.1; python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2, 3.3, 3.4'
-cython==0.29.33
-discord.py==2.1.0; python_version >= '3.8'
+discord.py==2.1.0; python_full_version >= '3.8.0'
 discord==2.1.0
 flatbuffers==23.1.21
 frozenlist==1.3.3; python_version >= '3.7'
-gast==0.4.0; python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2, 3.3'
-google-auth-oauthlib==0.4.6; python_full_version >= '3.6.0'
-google-auth==2.16.0; python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2, 3.3, 3.4, 3.5'
-google-pasta==0.2.0
-grpcio==1.51.1; python_version >= '3.7'
-h5py==3.8.0; python_version >= '3.7'
 humanfriendly==10.0; python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2, 3.3, 3.4'
-idna==3.4; python_full_version >= '3.5.0'
+idna==3.4; python_version >= '3.5'
 imageio==2.25.0; python_version >= '3.7'
-importlib-metadata==6.0.0; python_version < '3.10'
-keras==2.11.0
-libclang==15.0.6.1
-markdown==3.4.1; python_version >= '3.7'
-markupsafe==2.1.2; python_version >= '3.7'
 mpmath==1.2.1
 multidict==6.0.4; python_version >= '3.7'
-networkx==3.0; python_version >= '3.8'
-nsfw-detector==1.1.1
+networkx==3.0; python_full_version >= '3.8.0'
 nudenet==2.0.9
-numpy==1.24.1; python_version >= '3.8'
-oauthlib==3.2.2; python_full_version >= '3.6.0'
+numpy==1.24.1; python_full_version >= '3.8.0'
 onnxruntime==1.13.1
-opencv-python-headless==4.7.0.68; python_full_version >= '3.6.0'
-opt-einsum==3.3.0; python_full_version >= '3.5.0'
+opencv-python-headless==4.7.0.68; python_version >= '3.6'
 packaging==23.0; python_version >= '3.7'
 pillow==9.4.0; python_version >= '3.7'
 progressbar2==4.2.0; python_version >= '3.7'
-protobuf==3.19.6; python_full_version >= '3.5.0'
-pyasn1-modules==0.2.8
-pyasn1==0.4.8
-pydload==1.0.9; python_full_version >= '3.5.0'
-pyreadline3==3.4.1; python_version >= '3.8' and sys_platform == 'win32'
+protobuf==4.21.12; python_version >= '3.7'
+pydload==1.0.9; python_version >= '3.5'
+pyreadline3==3.4.1; python_full_version >= '3.8.0' and sys_platform == 'win32'
+python-dotenv==0.21.1
 python-utils==3.4.5; python_version >= '3.7'
-pywavelets==1.4.1; python_version >= '3.8'
-requests-oauthlib==1.3.1; python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2, 3.3'
+pywavelets==1.4.1; python_full_version >= '3.8.0'
 requests==2.28.2; python_version >= '3.7' and python_version < '4'
-rsa==4.9; python_full_version >= '3.6.0'
 scikit-image==0.19.3; python_version >= '3.7'
-scipy==1.10.0; python_version < '3.12' and python_version >= '3.8'
-setuptools==67.0.0; python_version >= '3.7'
-six==1.16.0; python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2, 3.3'
-sympy==1.11.1; python_version >= '3.8'
-tensorboard-data-server==0.6.1; python_full_version >= '3.6.0'
-tensorboard-plugin-wit==1.8.1
-tensorboard==2.11.2; python_version >= '3.7'
-tensorflow-estimator==2.11.0; python_version >= '3.7'
-tensorflow-hub==0.7.0
-tensorflow-intel==2.11.0; platform_system == 'Windows'
-tensorflow-io-gcs-filesystem==0.30.0; platform_machine != 'arm64' or platform_system != 'Darwin'
-tensorflow==2.11.0
-termcolor==2.2.0; python_version >= '3.7'
-tifffile==2023.1.23.1; python_version >= '3.8'
-typing-extensions==4.4.0; python_version >= '3.7'
+scipy==1.10.0; python_version < '3.12' and python_full_version >= '3.8.0'
+sympy==1.11.1; python_full_version >= '3.8.0'
+tifffile==2023.1.23.1; python_full_version >= '3.8.0'
 urllib3==1.26.14; python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2, 3.3, 3.4, 3.5'
-werkzeug==2.2.2; python_version >= '3.7'
-wheel==0.38.4; python_version >= '3.7'
-wrapt==1.14.1; python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2, 3.3, 3.4'
 yarl==1.8.2; python_version >= '3.7'
-zipp==3.12.0; python_version >= '3.7'

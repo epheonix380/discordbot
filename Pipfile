@@ -5,10 +5,6 @@ name = "pypi"
 
 [packages]
 discord = "*"
-cython = "*"
-keras = "*"
-nsfw-detector = "*"
-tensorflow = "*"
 nudenet = "*"
 onnxruntime = "*"
 python-dotenv = "*"
