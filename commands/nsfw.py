@@ -1,6 +1,5 @@
 from nudenet.classifier import Classifier as NudeClassifier
 import discord
-from storage.models import *
 import requests
 classifier = NudeClassifier()
 
@@ -15,10 +14,12 @@ async def handle_nsfw(message):
         obj = classifier.classify("SPOILER_{i}.png")
         if obj["SPOILER_{i}.png"]['safe']< 0.5:
             trigger = trigger and False
+            files.append(discord.File("SPOILER_{i}.png"))
         else:
-            files += discord.File("SPOILER_{i}.png")
-        trigger = trigger and True
+            trigger = trigger and True
     if trigger:
         return
     else:
+        print("test")
+        print(files)
         await message.channel.send(message.content, files=files)

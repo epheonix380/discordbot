@@ -1,10 +1,8 @@
 import discord
-from commands.nsfw import handle_nsfw
 from dotenv import load_dotenv
-from helpers.getNSFWChannel import getNSFWChannel
-import os 
+import os
+from commands.nsfw import handle_nsfw
 load_dotenv()
-
 TOKEN = os.getenv("TOKEN")
 intents = discord.Intents.default()
 intents.message_content = True
@@ -17,11 +15,13 @@ async def on_ready():
 
 @client.event
 async def on_message(message):
-    if message.content.startswith(','):
+    if str(message.author.id) == "845668514341191750":
+        return
+    elif message.content.startswith(','):
         await message.channel.send("That is our prefix!")
     elif message.attachments:
-        if not (message.channel.id == getNSFWChannel(message.guild.id)):
-            await handle_nsfw(message)
+        await handle_nsfw(message)
+            
     
     
 
