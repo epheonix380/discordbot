@@ -17,6 +17,7 @@ async def handle_nsfw(message):
             files.append(discord.File("SPOILER_{i}.png"))
         else:
             trigger = trigger and True
+            files.append(discord.File("{i}.png"))
     if trigger:
         return
     else:
