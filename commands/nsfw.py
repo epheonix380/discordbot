@@ -20,6 +20,5 @@ async def handle_nsfw(message):
     if trigger:
         return
     else:
-        print("test")
-        print(files)
         await message.channel.send(message.content, files=files)
+        await message.delete()
