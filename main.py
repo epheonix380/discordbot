@@ -19,7 +19,7 @@ async def on_message(message):
         return
     elif message.content.startswith(','):
         await message.channel.send("That is our prefix!")
-    elif message.attachments:
+    elif message.attachments or len(message.embeds)>0:
         await handle_nsfw(message)
             
     
