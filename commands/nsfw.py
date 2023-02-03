@@ -24,20 +24,22 @@ async def handle_nsfw(message):
             trigger = trigger and True
         i = i+1
     for embed in message.embeds:
-        img_data = requests.get(embed.url).content
-        with open(f"SPOILER_{i}.png", "wb") as handler:
-            handler.write(img_data)
-        obj = classifier.classify(f"SPOILER_{i}.png")
-        if obj[f"SPOILER_{i}.png"]['safe']< 0.5:
-            containsEmbeds = True
-            trigger = trigger and False
-            files.append(discord.File(f"SPOILER_{i}.png"))
-        else:
-            with open(f"{i}.png", "wb") as handler:
+        try:
+            img_data = requests.get(embed.url).content
+            with open(f"SPOILER_{i}.png", "wb") as handler:
                 handler.write(img_data)
-                files.append(discord.File(f"{i}.png"))
-            trigger = trigger and True
-            
+            obj = classifier.classify(f"SPOILER_{i}.png")
+            if obj[f"SPOILER_{i}.png"]['safe']< 0.5:
+                containsEmbeds = True
+                trigger = trigger and False
+                files.append(discord.File(f"SPOILER_{i}.png"))
+            else:
+                with open(f"{i}.png", "wb") as handler:
+                    handler.write(img_data)
+                    files.append(discord.File(f"{i}.png"))
+                trigger = trigger and True
+        except:
+            continue
         i=i+1
     if trigger:
         return
