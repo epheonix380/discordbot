@@ -14,35 +14,38 @@ async def handle_nsfw(message):
             img_data = requests.get(thing.url).content
             with open(f"SPOILER_{i}.png", "wb") as handler:
                 handler.write(img_data)
-            obj = classifier.classify(f"SPOILER_{i}.png")
-            if obj[f"SPOILER_{i}.png"]['safe']< 0.5:
-                trigger = trigger and False
-                files.append(discord.File(f"SPOILER_{i}.png"))
-            else:
-                with open(f"{i}.png", "wb") as handler:
-                    handler.write(img_data)
-                    files.append(discord.File(f"{i}.png"))
-                trigger = trigger and True
-            i = i+1
+                obj = classifier.classify(f"SPOILER_{i}.png")
+                if obj[f"SPOILER_{i}.png"]['safe']< 0.5:
+                    trigger = trigger and False
+                    files.append(discord.File(f"SPOILER_{i}.png"))
+                else:
+                    with open(f"{i}.png", "wb") as handler:
+                        handler.write(img_data)
+                        files.append(discord.File(f"{i}.png"))
+                        trigger = trigger and True
+                i = i+1
         except:
             continue
     for embed in message.embeds:
         try:
+            
             img_data = requests.get(embed.url).content
             with open(f"SPOILER_{i}.png", "wb") as handler:
                 handler.write(img_data)
-            obj = classifier.classify(f"SPOILER_{i}.png")
-            if obj[f"SPOILER_{i}.png"]['safe']< 0.5:
-                containsEmbeds = True
-                trigger = trigger and False
-                files.append(discord.File(f"SPOILER_{i}.png"))
-            else:
-                with open(f"{i}.png", "wb") as handler:
-                    handler.write(img_data)
-                    files.append(discord.File(f"{i}.png"))
-                trigger = trigger and True
-            i=i+1
-        except:
+                obj = classifier.classify(f"SPOILER_{i}.png")
+                if obj[f"SPOILER_{i}.png"]['safe']< 0.5:
+                    containsEmbeds = True
+                    trigger = trigger and False
+                    files.append(discord.File(f"SPOILER_{i}.png"))
+                else:
+                    with open(f"{i}.png", "wb") as handler:
+                        handler.write(img_data)
+                        files.append(discord.File(f"{i}.png"))
+                        trigger = trigger and True
+                i=i+1
+                print("test1")
+        except Exception as e:
+            print(str(e))
             continue
         
     if trigger:
