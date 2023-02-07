@@ -7,6 +7,7 @@ classifier = NudeClassifier()
 async def handle_nsfw(message):
     trigger = True
     containsEmbeds = False
+    regex = re.compile("(https?\:\S+\.(png)|(jpg)|(jpeg)|(gif))")
     i = 0
     files = []
     for thing in message.attachments:
@@ -27,9 +28,7 @@ async def handle_nsfw(message):
         except:
             continue
     for embed in message.embeds:
-        print("Now in embeds")
         try:
-            
             img_data = requests.get(embed.url).content
             with open(f"SPOILER_{i}.png", "wb") as handler:
                 handler.write(img_data)
@@ -53,7 +52,7 @@ async def handle_nsfw(message):
         return
     else:
         if containsEmbeds:
-            newContent = re.sub("(http)s?\:\S*\.(?:png|jpg|jpeg|gif)","NSFW LINK DETECTED", message.content)
+            newContent = re.sub(regex,"NSFW LINK DETECTED", message.content)
             await message.channel.send(newContent, files=files)
         else:
             await message.channel.send(message.content, files=files)
@@ -64,25 +63,25 @@ async def handel_regex_nsfw(message):
     containsEmbeds = False
     i = 0
     files = []
-    regex = re.compile("(https?\:\S+\.png|jpg|jpeg|gif)")
-    arr = re.findall(regex, message.content)
+    regex = re.compile("(https?\:\S+\.(png)|(jpg)|(jpeg)|(gif))")
+    arr = re.finditer(regex, message.content)
     for match in arr:
         try:
-            img_data = requests.get(str(match)).content
-            with open(f"SPOILER_{i}.png", "wb") as handler:
-                handler.write(img_data)
-                obj = classifier.classify(f"SPOILER_{i}.png")
-                if obj[f"SPOILER_{i}.png"]['safe']< 0.5:
-                    containsEmbeds = True
-                    trigger = trigger and False
-                    files.append(discord.File(f"SPOILER_{i}.png"))
-                else:
-                    with open(f"{i}.png", "wb") as handler:
-                        handler.write(img_data)
-                        files.append(discord.File(f"{i}.png"))
-                        trigger = trigger and True
-                i=i+1
-                print("test1")
+            if match.group(0) is not None:
+                img_data = requests.get(str(match.group(0))).content
+                with open(f"SPOILER_{i}.png", "wb") as handler:
+                    handler.write(img_data)
+                    obj = classifier.classify(f"SPOILER_{i}.png")
+                    if obj[f"SPOILER_{i}.png"]['safe']< 0.5:
+                        containsEmbeds = True
+                        trigger = trigger and False
+                        files.append(discord.File(f"SPOILER_{i}.png"))
+                    else:
+                        with open(f"{i}.png", "wb") as handler:
+                            handler.write(img_data)
+                            files.append(discord.File(f"{i}.png"))
+                            trigger = trigger and True
+                    i=i+1
         except Exception as e:
             print(str(e))
             continue

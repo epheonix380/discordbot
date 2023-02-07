@@ -16,13 +16,17 @@ async def on_ready():
 
 @client.event
 async def on_message(message):
+    arr = []
+    for match in re.finditer("https?\:\S+\.(png)|(jpg)|(jpeg)|(gif)", message.content):
+        if match.group(0) is not None:
+            arr.append(match.group(0))
     if str(message.author.id) == "845668514341191750":
         return
     elif message.content.startswith(','):
         await message.channel.send("That is our prefix!")
-    elif message.attachments or len(message.embeds)>0:
+    elif message.attachments: #or len(message.embeds)>0:
         await handle_nsfw(message)
-    elif re.match("(http)s?\:\S*\.(?:png|jpg|jpeg|gif)", message.content):
+    elif len(arr) != 0:
         await handel_regex_nsfw(message)
 
     
