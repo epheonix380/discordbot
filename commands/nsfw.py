@@ -7,7 +7,7 @@ classifier = NudeClassifier()
 async def handle_nsfw(message):
     trigger = True
     containsEmbeds = False
-    regex = re.compile("(https?\:\S+\.(png)|(jpg)|(jpeg)|(gif))")
+    regex = re.compile("https?\:\S+\.(png)|https?\:\S+\.(jpg)|https?\:\S+\.(jpeg)|https?\:\S+\.(gif)")
     i = 0
     files = []
     for thing in message.attachments:
@@ -63,9 +63,10 @@ async def handel_regex_nsfw(message):
     containsEmbeds = False
     i = 0
     files = []
-    regex = re.compile("(https?\:\S+\.(png)|(jpg)|(jpeg)|(gif))")
+    regex = re.compile("https?\:\S+\.(png)|https?\:\S+\.(jpg)|https?\:\S+\.(jpeg)|https?\:\S+\.(gif)")
     arr = re.finditer(regex, message.content)
     for match in arr:
+        print(match)
         try:
             if match.group(0) is not None:
                 img_data = requests.get(str(match.group(0))).content

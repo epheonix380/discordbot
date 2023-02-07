@@ -17,7 +17,7 @@ async def on_ready():
 @client.event
 async def on_message(message):
     arr = []
-    for match in re.finditer("https?\:\S+\.(png)|(jpg)|(jpeg)|(gif)", message.content):
+    for match in re.finditer("https?\:\S+\.(png)|https?\:\S+\.(jpg)|https?\:\S+\.(jpeg)|https?\:\S+\.(gif)", message.content):
         if match.group(0) is not None:
             arr.append(match.group(0))
     if str(message.author.id) == "845668514341191750":
