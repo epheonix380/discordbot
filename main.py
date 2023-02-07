@@ -1,7 +1,8 @@
 import discord
 from dotenv import load_dotenv
 import os
-from commands.nsfw import handle_nsfw
+import re
+from commands.nsfw import handle_nsfw, handel_regex_nsfw
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
 intents = discord.Intents.default()
@@ -21,7 +22,9 @@ async def on_message(message):
         await message.channel.send("That is our prefix!")
     elif message.attachments or len(message.embeds)>0:
         await handle_nsfw(message)
-            
+    elif re.match("(http)s?\:\S*\.(?:png|jpg|jpeg|gif)", message.content):
+        await handel_regex_nsfw(message)
+
     
     
 
