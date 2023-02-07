@@ -1,14 +1,22 @@
 import discord
 from dotenv import load_dotenv
+from django.conf import settings
 import os
 import re
-from commands.nsfw import handle_nsfw, handel_regex_nsfw
+from automod.nsfw import handle_nsfw, handel_regex_nsfw
+from backend import brocken as notSettings
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
 intents = discord.Intents.default()
 intents.message_content = True
-
+if __name__ == '__main__':
+    import django
+    django.setup()
 client = discord.Client(intents=intents)
+
+
+from helpers.getNSFWChannel import getNSFWChannel
 
 @client.event
 async def on_ready():
@@ -22,12 +30,14 @@ async def on_message(message):
             arr.append(match.group(0))
     if str(message.author.id) == "845668514341191750":
         return
-    elif message.content.startswith(','):
+    nsfwChannel = await getNSFWChannel(message.guild.id)
+    if (str(nsfwChannel) != str(message.channel.id)):
+        if message.attachments: #or len(message.embeds)>0:
+            await handle_nsfw(message)
+        elif len(arr) != 0:
+            await handel_regex_nsfw(message)
+    if message.content.startswith(','):
         await message.channel.send("That is our prefix!")
-    elif message.attachments: #or len(message.embeds)>0:
-        await handle_nsfw(message)
-    elif len(arr) != 0:
-        await handel_regex_nsfw(message)
 
     
     
