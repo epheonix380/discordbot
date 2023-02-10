@@ -12,6 +12,7 @@ pytz = "*"
 dj-database-url = "*"
 opencv-python-headless = "*"
 pydload = "*"
+scikit-image = "*"
 
 [dev-packages]
 
