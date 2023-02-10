@@ -10,6 +10,7 @@ python-dotenv = "*"
 django = "*"
 pytz = "*"
 dj-database-url = "*"
+opencv-python-headless = "*"
 
 [dev-packages]
 
