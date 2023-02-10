@@ -9,6 +9,7 @@ onnxruntime = "*"
 python-dotenv = "*"
 django = "*"
 pytz = "*"
+dj-database-url = "*"
 
 [dev-packages]
 
