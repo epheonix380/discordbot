@@ -12,7 +12,7 @@ class GuildMemberMapAdmin(admin.ModelAdmin):
     list_display = ('guild', 'member')
 
 class TimeZoneAdmin(admin.ModelAdmin):
-    list_display = ('time_zone', 'gmt_offset')
+    list_display = ('time_zone',)
 
 class MemberTimeZoneMapAdmin(admin.ModelAdmin):
     list_display = ('member', 'time_zone')

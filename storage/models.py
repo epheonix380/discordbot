@@ -10,7 +10,6 @@ class Guild(models.Model):
 
 class TimeZone(models.Model):
     time_zone = models.CharField(max_length=32, choices=TIMEZONES)
-    gmt_offset = models.IntegerField(default=0)
 
 class Member(models.Model):
     member_id = models.CharField(max_length=18)

@@ -4,8 +4,7 @@ from django.conf import settings
 import os
 import re
 from automod.nsfw import handle_nsfw, handel_regex_nsfw
-from commands.nsfw import manual_nsfw
-from commands.time import timeHandler
+
 from backend import brocken as notSettings
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
@@ -17,7 +16,8 @@ if __name__ == '__main__':
     django.setup()
 client = discord.Client(intents=intents)
 
-
+from commands.nsfw import manual_nsfw
+from commands.time import timeHandler
 from helpers.getNSFWChannel import getNSFWChannel
 
 @client.event

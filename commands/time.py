@@ -1,6 +1,7 @@
 import re
 import pytz
 import datetime
+from helpers.timeStrore import getDefaultTimezone, setDefaultTimezone
 
 async def timeHandler(message):
     instruction = str(message.content).strip().split(" ")
@@ -29,16 +30,30 @@ async def timeHandler(message):
         #,time Bangkok
         # But also ,time New York
         # But also ,time noneSenseValueHere
-        timeZone = pytz.utc
-        city = "".join(instruction[1::]).strip()
-        from pytz import all_timezones
-        for timezone in all_timezones:
-            if city in timezone:
-                timeZone = pytz.timezone(timezone)
-        convertedTime = datetime.datetime.now().astimezone(timeZone)
-        content = f"Time in {city} is " + convertedTime.strftime("%H:%M") + " on " + convertedTime.strftime("%d-%m-%Y")
-        await message.channel.send(content)
-    
+        if (instruction[1] == "default"):
+            city = "".join(instruction[2::]).strip()
+            tempTimeZone = ""
+            from pytz import all_timezones
+            for timezone in all_timezones:
+                if city in timezone:
+                    tempTimeZone = timezone
+                    timeZone = pytz.timezone(timezone)
+            await setDefaultTimezone(message.author.id, tempTimeZone)
+        if (instruction[1] == "getDefault"):
+            default = await getDefaultTimezone(message.author.id)
+            await message.channel.send(default)
+            
+        else:
+            timeZone = pytz.utc
+            city = "".join(instruction[1::]).strip()
+            from pytz import all_timezones
+            for timezone in all_timezones:
+                if city in timezone:
+                    timeZone = pytz.timezone(timezone)
+            convertedTime = datetime.datetime.now().astimezone(timeZone)
+            content = f"Time in {city} is " + convertedTime.strftime("%H:%M") + " on " + convertedTime.strftime("%d-%m-%Y")
+            await message.channel.send(content)
+        
     await message.delete()
 
         
