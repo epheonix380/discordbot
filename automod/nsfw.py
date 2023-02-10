@@ -51,11 +51,14 @@ async def handle_nsfw(message):
     if trigger:
         return
     else:
+        sentMessage = ""
         if containsEmbeds:
             newContent = re.sub(regex,"NSFW LINK DETECTED", message.content)
-            await message.channel.send(newContent, files=files)
+            sentMessage = await message.channel.send(newContent, files=files)
         else:
-            await message.channel.send(message.content, files=files)
+            sentMessage = await message.channel.send(message.content, files=files)
+        sentBy = f"Sent by: <@{message.author.id}>\n"
+        await sentMessage.edit(content=sentBy+sentMessage.content)
         await message.delete()
 
 async def handel_regex_nsfw(message):
@@ -89,10 +92,13 @@ async def handel_regex_nsfw(message):
     if trigger:
         return
     else:
+        sentMessage = ""
         if containsEmbeds:
             newContent = re.sub(regex,"NSFW LINK DETECTED", message.content)
-            await message.channel.send(newContent, files=files)
+            sentMessage = await message.channel.send(newContent, files=files)
         else:
-            await message.channel.send(message.content, files=files)
+            sentMessage = await message.channel.send(message.content, files=files)
+        sentBy = f"Sent by: <@{message.author.id}>\n"
+        await sentMessage.edit(content=sentBy+sentMessage.content)
         await message.delete()
         

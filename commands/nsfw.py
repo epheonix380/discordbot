@@ -16,7 +16,9 @@ async def manual_nsfw(message):
         content = ""
         if (len(str(message.reference.resolved.content)) > 0):
             content = "||"+str(message.reference.resolved.content)+"||"
-        await message.reference.resolved.channel.send(content, files=files)
+        sentMessage = await message.reference.resolved.channel.send(content, files=files)
+        sentBy = f"Sent by: <@{message.reference.resolved.author.id}>\n"
+        await sentMessage.edit(content=sentBy+sentMessage.content)
         await message.reference.resolved.delete()
         await message.delete()
     else:

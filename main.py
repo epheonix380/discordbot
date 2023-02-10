@@ -5,6 +5,7 @@ import os
 import re
 from automod.nsfw import handle_nsfw, handel_regex_nsfw
 from commands.nsfw import manual_nsfw
+from commands.time import timeHandler
 from backend import brocken as notSettings
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
@@ -39,6 +40,8 @@ async def on_message(message):
             await handel_regex_nsfw(message)
     if message.content.startswith(",nsfw"):
         await manual_nsfw(message=message)
+    elif message.content.startswith(",time"):
+        await timeHandler(message=message)
     elif message.content.startswith(','):
         await message.channel.send("That is our prefix!")
 
