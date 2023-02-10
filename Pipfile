@@ -11,6 +11,7 @@ django = "*"
 pytz = "*"
 dj-database-url = "*"
 opencv-python-headless = "*"
+pydload = "*"
 
 [dev-packages]
 

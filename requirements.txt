@@ -24,6 +24,8 @@ async-timeout==4.0.2; python_version >= '3.6'
 
 attrs==22.2.0; python_version >= '3.6'
 
+certifi==2022.12.7; python_version >= '3.6'
+
 charset-normalizer==2.1.1; python_version >= '3.6'
 
 coloredlogs==15.0.1; python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2, 3.3, 3.4'
@@ -56,19 +58,29 @@ opencv-python-headless==4.7.0.68; python_version >= '3.6'
 
 packaging==23.0; python_version >= '3.7'
 
+progressbar2==4.2.0; python_version >= '3.7'
+
 protobuf==4.21.12; python_version >= '3.7'
+
+pydload==1.0.9
 
 pyreadline3==3.4.1; python_full_version >= '3.8.0' and sys_platform == 'win32'
 
 python-dotenv==0.21.1
 
+python-utils==3.5.2; python_version >= '3.7'
+
 pytz==2022.7.1
+
+requests==2.28.2; python_version >= '3.7' and python_version < '4'
 
 sqlparse==0.4.3; python_version >= '3.5'
 
 sympy==1.11.1; python_full_version >= '3.8.0'
 
 tzdata==2022.7; sys_platform == 'win32'
+
+urllib3==1.26.14; python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2, 3.3, 3.4, 3.5'
 
 yarl==1.8.2; python_version >= '3.7'
 
