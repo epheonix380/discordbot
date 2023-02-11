@@ -1,13 +1,25 @@
 import re
 import pytz
 import datetime
-from helpers.timeStrore import getDefaultTimezone, setDefaultTimezone
+from helpers.timeStrore import getDefaultTimezone, setDefaultTimezone, addTimezone, removeTimezone, getTimezones
 
 async def timeHandler(message):
     instruction = str(message.content).strip().split(" ")
-    if (False and len(instruction) == 1):
+    if (len(instruction) == 1):
         #,time
-        print("we are working on this")
+        content = ""
+        timezones = await getTimezones(message.author.id)
+        for timezone in timezones:
+            if (timezone['time_zone'] == ""):
+                continue
+            timeZone = pytz.timezone(timezone['time_zone'])
+            convertedTime = datetime.datetime.now().astimezone(timeZone)
+            content += f"Time in {timezone['time_zone']} is " + convertedTime.strftime("%H:%M") + " on " + convertedTime.strftime("%d-%m-%Y") + "\n"
+        if (content == ""):
+            content = "We found no timezones for your user, please use ,time add <City name> to add timezones"
+        await message.channel.send(content)
+        
+
     elif (False and len(instruction) >= 5 and instruction[1] == "convert"):
         #,time convert 12:00 Singapore to Bangkok
         
@@ -45,6 +57,32 @@ async def timeHandler(message):
                         tempTimeZone = timezone
                         timeZone = pytz.timezone(timezone)
                 await setDefaultTimezone(message.author.id, tempTimeZone)  
+        elif (instruction[1] == "add"):
+            city = "".join(instruction[2::]).strip()
+            tempTimeZone = ""
+            from pytz import all_timezones
+            for timezone in all_timezones:
+                if city in timezone:
+                    tempTimeZone = timezone
+                    timeZone = pytz.timezone(timezone)
+            created = await addTimezone(message.author.id, tempTimeZone)  
+            if (created):
+                await message.channel.send("Added!")
+            else:
+                await message.channel.send("There was an error")
+        elif (instruction[1] == "remove"):
+            city = "".join(instruction[2::]).strip()
+            tempTimeZone = ""
+            from pytz import all_timezones
+            for timezone in all_timezones:
+                if city in timezone:
+                    tempTimeZone = timezone
+                    timeZone = pytz.timezone(timezone)
+            created = await removeTimezone(message.author.id, tempTimeZone)  
+            if (created):
+                await message.channel.send("Removed!")
+            else:
+                await message.channel.send("There was an error")
         else:
             timeZone = pytz.utc
             city = "".join(instruction[1::]).strip()

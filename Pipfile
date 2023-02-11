@@ -14,6 +14,9 @@ opencv-python-headless = "*"
 pydload = "*"
 scikit-image = "*"
 psycopg2 = "*"
+djangorestframework = "*"
+markdown = "*"
+django-filter = "*"
 
 [dev-packages]
 
