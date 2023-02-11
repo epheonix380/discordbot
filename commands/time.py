@@ -31,18 +31,18 @@ async def timeHandler(message):
         # But also ,time New York
         # But also ,time noneSenseValueHere
         if (instruction[1] == "default"):
-            city = "".join(instruction[2::]).strip()
-            tempTimeZone = ""
-            from pytz import all_timezones
-            for timezone in all_timezones:
-                if city in timezone:
-                    tempTimeZone = timezone
-                    timeZone = pytz.timezone(timezone)
-            await setDefaultTimezone(message.author.id, tempTimeZone)
-        elif (instruction[1] == "getDefault"):
-            default = await getDefaultTimezone(message.author.id)
-            await message.channel.send(default)
-            
+            if (len(instruction)==2):
+                default = await getDefaultTimezone(message.author.id)
+                await message.channel.send(default)
+            else:
+                city = "".join(instruction[2::]).strip()
+                tempTimeZone = ""
+                from pytz import all_timezones
+                for timezone in all_timezones:
+                    if city in timezone:
+                        tempTimeZone = timezone
+                        timeZone = pytz.timezone(timezone)
+                await setDefaultTimezone(message.author.id, tempTimeZone)  
         else:
             timeZone = pytz.utc
             city = "".join(instruction[1::]).strip()

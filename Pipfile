@@ -13,6 +13,7 @@ dj-database-url = "*"
 opencv-python-headless = "*"
 pydload = "*"
 scikit-image = "*"
+psycopg2 = "*"
 
 [dev-packages]
 
