@@ -4,7 +4,6 @@ from django.conf import settings
 import os
 import re
 from automod.nsfw import handle_nsfw, handel_regex_nsfw
-
 from backend import brocken as notSettings
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
@@ -18,6 +17,7 @@ client = discord.Client(intents=intents)
 
 from commands.nsfw import manual_nsfw
 from commands.time import timeHandler
+from commands.admin import admin
 from helpers.getNSFWChannel import getNSFWChannel
 
 @client.event
@@ -42,6 +42,8 @@ async def on_message(message):
         await manual_nsfw(message=message)
     elif message.content.startswith(",time"):
         await timeHandler(message=message)
+    elif message.content.startswith(",admin"):
+        await admin(message=message)
     elif message.content.startswith(','):
         await message.channel.send("That is our prefix!")
 

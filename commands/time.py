@@ -33,6 +33,8 @@ async def timeHandler(message):
         if (instruction[1] == "default"):
             if (len(instruction)==2):
                 default = await getDefaultTimezone(message.author.id)
+                if default is None:
+                    default = "No defaults found, please use ,time default <City name> to set a default"
                 await message.channel.send(default)
             else:
                 city = "".join(instruction[2::]).strip()
