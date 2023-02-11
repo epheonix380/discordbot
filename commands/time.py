@@ -39,7 +39,7 @@ async def timeHandler(message):
                     tempTimeZone = timezone
                     timeZone = pytz.timezone(timezone)
             await setDefaultTimezone(message.author.id, tempTimeZone)
-        if (instruction[1] == "getDefault"):
+        elif (instruction[1] == "getDefault"):
             default = await getDefaultTimezone(message.author.id)
             await message.channel.send(default)
             
