@@ -14,29 +14,70 @@ async def timeHandler(message):
                 continue
             timeZone = pytz.timezone(timezone['time_zone'])
             convertedTime = datetime.datetime.now().astimezone(timeZone)
-            content += f"Time in {timezone['time_zone']} is " + convertedTime.strftime("%H:%M") + " on " + convertedTime.strftime("%d-%m-%Y") + "\n"
+            cityName = timezone['time_zone']
+            if ("/" in timezone['time_zone']):
+                cityName = timezone['time_zone'].split('/')[1]
+            content += f"Time in {cityName} is " + convertedTime.strftime("%H:%M") + " on " + convertedTime.strftime("%d-%m-%Y") + "\n"
         if (content == ""):
             content = "We found no timezones for your user, please use ,time add <City name> to add timezones"
         await message.channel.send(content)
         
 
-    elif (False and len(instruction) >= 5 and instruction[1] == "convert"):
+    elif (len(instruction) >= 4 and instruction[1] == "convert"):
         #,time convert 12:00 Singapore to Bangkok
         
-        newContent = "".join(instruction[2::])
-        cities = newContent.split(" to ")
-        cityToConvertTo = cities[1]
-        toCode = ""
-        fromCode = ""
-        timeString =  re.match("\d?\d\:\d\d(am)?(pm)?",cities[0]).group(0)
-        cityToConvertFrom = re.sub("\d?\d\:\d\d(am)?(pm)?","",cities[0]).strip()
-        from pytz import all_timezones
-        for timezone in all_timezones:
-            if cityToConvertTo in timezone:
-                toCode = timezone
-            if cityToConvertFrom in timezone:
-                fromCode = timezone
-        
+        newContent = " ".join(instruction[2::])
+        if ("to" in newContent):
+            cities = newContent.split(" to ")
+            cityToConvertTo = cities[1]
+            toCode = ""
+            fromCode = ""
+            timeString =  re.match("\d?\d\:\d\d(am)?(pm)?",cities[0]).group(0)
+            cityToConvertFrom = re.sub("\d?\d\:\d\d(am)?(pm)?","",cities[0]).strip()
+            from pytz import all_timezones
+            for timezone in all_timezones:
+                if cityToConvertTo in timezone:
+                    toCode = timezone
+                if cityToConvertFrom in timezone:
+                    fromCode = timezone
+            hour = int(timeString.split(":")[0])
+            minute = int(timeString.split(":")[1][0:2])
+            if (len(timeString.split(":")[1])==4 and timeString.split(":")[1][2:4].lower()=="pm"):
+                hour = (hour + 12)%24
+            fromTimeZone = pytz.timezone(fromCode)
+            toTimeZone = pytz.timezone(toCode)
+            today = datetime.datetime.now(tz=fromTimeZone)
+            fromTime = fromTimeZone.localize(datetime.datetime(year=today.year, month=today.month, day=today.day, hour=hour, minute=minute))
+            toTime = fromTime.astimezone(toTimeZone)
+            content = f"When it is {timeString} in {cityToConvertFrom} it will be " + toTime.strftime("%H:%M") + " in " + cityToConvertTo
+            await message.channel.send(content)
+        else:
+            cityToConvertFrom = await getDefaultTimezone(message.author.id)
+            if (cityToConvertFrom is None):
+                content = "No default timezone found:\nThis version of the command requires you to set a default timezone if you do not want to set one you can use this command instead:\n```,time convert <time> <from-city-name> to <to-city-name>```\nOr you can set your default timezone using this command:\n```,time default <city-name>```"
+                return await message.channel.send(content)
+            timeString =  re.match("\d?\d\:\d\d(am)?(pm)?",newContent).group(0)
+            cityToConvertTo = re.sub("\d?\d\:\d\d(am)?(pm)?","",newContent).strip()
+            from pytz import all_timezones
+            for timezone in all_timezones:
+                if cityToConvertTo in timezone:
+                    toCode = timezone
+                if cityToConvertFrom in timezone:
+                    fromCode = timezone
+            hour = int(timeString.split(":")[0])
+            minute = int(timeString.split(":")[1][0:2])
+            if (len(timeString.split(":")[1])==4 and timeString.split(":")[1][2:4].lower()=="pm"):
+                hour = (hour + 12)%24
+            fromTimeZone = pytz.timezone(fromCode)
+            toTimeZone = pytz.timezone(toCode)
+            today = datetime.datetime.now(tz=fromTimeZone)
+            fromTime = fromTimeZone.localize(datetime.datetime(year=today.year, month=today.month, day=today.day, hour=hour, minute=minute))
+            toTime = fromTime.astimezone(toTimeZone)
+            fromCity = cityToConvertFrom.split("/")[1]
+            content = f"When it is {timeString} in {fromCity} it will be " + toTime.strftime("%H:%M") + " in " + cityToConvertTo
+            await message.channel.send(content)
+            
+            
         
     else:
         #,time Bangkok
