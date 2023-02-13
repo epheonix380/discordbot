@@ -1,10 +1,11 @@
 import re
 import pytz
 import datetime
-from helpers.timeStrore import getDefaultTimezone, setDefaultTimezone, addTimezone, removeTimezone, getTimezones
+from helpers.timeStrore import getDefaultTimezone, setDefaultTimezone, addTimezone, removeTimezone, getTimezones, getFormat, setFormat
 
 async def timeHandler(message):
     instruction = str(message.content).strip().split(" ")
+    timeFormat = await getFormat(message.author.id)
     if (len(instruction) == 1):
         #,time
         content = ""
@@ -17,7 +18,7 @@ async def timeHandler(message):
             cityName = timezone['time_zone']
             if ("/" in timezone['time_zone']):
                 cityName = timezone['time_zone'].split('/')[1]
-            content += f"Time in {cityName} is " + convertedTime.strftime("%H:%M") + " on " + convertedTime.strftime("%d-%m-%Y") + "\n"
+            content += f"Time in {cityName} is " + convertedTime.strftime(timeFormat)+ "\n"
         if (content == ""):
             content = "We found no timezones for your user, please use ,time add <City name> to add timezones"
         await message.channel.send(content)
@@ -124,6 +125,38 @@ async def timeHandler(message):
                 await message.channel.send("Removed!")
             else:
                 await message.channel.send("There was an error")
+        elif instruction[1] == "format":
+            if (len(instruction)==2):
+                content = """Add a format by using ,time format <format> command!
+        Here are some formats you can use:\n
+            %H:%M is a normal 24hr clock eg. 15:34\n
+            %I:%M %p is a normal 12hr clock eg. 03:34pm\n
+            %Y is the full year eg. 2020\n
+            %y is the short year eg. 20\n
+            %m is the month in digits eg. 12\n 
+            %b is the short month in letters eg. Dec\n
+            %B is the long month in letters eg. December\n
+            %d is the date eg. 04\n
+            %A is the long day of the week eg. Tuesday\n
+            %a is the short day of the week eg. Tue\n\n
+            The default example is %H:%M on %d-%m-%Y
+            Here is the reference: https://www.w3schools.com/python/python_datetime.asp 
+                                """
+                await message.channel.send(content)
+            elif (instruction[2] == "default"):
+                await setFormat(message.author.id,"%H:%M on %d-%m-%Y")
+                await message.channel.send("Success!")
+            else:
+                format = " ".join(instruction[2::]).strip()
+                await setFormat(message.author.id,format)
+                timeZone = pytz.timezone("America/Vancouver")
+                convertedTime = datetime.datetime.now().astimezone(timeZone)
+                content = "Time messages will now be send like this:\n"
+                content += f"Time in Vancouver is " + convertedTime.strftime(format)
+                await message.channel.send(content)
+
+
+
         else:
             timeZone = pytz.utc
             city = "".join(instruction[1::]).strip()
@@ -132,7 +165,7 @@ async def timeHandler(message):
                 if city in timezone:
                     timeZone = pytz.timezone(timezone)
             convertedTime = datetime.datetime.now().astimezone(timeZone)
-            content = f"Time in {city} is " + convertedTime.strftime("%H:%M") + " on " + convertedTime.strftime("%d-%m-%Y")
+            content = f"Time in {city} is " + convertedTime.strftime(timeFormat)
             await message.channel.send(content)
         
     await message.delete()

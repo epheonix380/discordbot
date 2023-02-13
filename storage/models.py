@@ -5,15 +5,16 @@ TIMEZONES = tuple(zip(pytz.all_timezones, pytz.all_timezones))
 # Create your models here.
 
 class Guild(models.Model):
-    guild_id = models.CharField(max_length=18)
+    guild_id = models.CharField(max_length=18, unique=True)
     nsfw_channel = models.CharField(max_length=18, null=True, blank=True, default=None)
 
 class TimeZone(models.Model):
     time_zone = models.CharField(max_length=32, choices=TIMEZONES)
 
 class Member(models.Model):
-    member_id = models.CharField(max_length=18)
+    member_id = models.CharField(max_length=18, unique=True)
     time_zone = models.ForeignKey(TimeZone, on_delete=models.CASCADE, default=None, null=True)
+    time_format = models.CharField(max_length=64, default="%H:%M on %d-%m-%Y")
 
 class GuildMemberMap(models.Model):
     guild = models.ForeignKey(Guild, on_delete=models.CASCADE)
@@ -24,5 +25,5 @@ class MemberTimeZoneMap(models.Model):
     time_zone = models.ForeignKey(TimeZone, on_delete=models.CASCADE)
 
 class BotIgnoreChannels(models.Model):
-    channel_id = models.CharField(max_length=18)
+    channel_id = models.CharField(max_length=18, unique=True)
     guild = models.ForeignKey(Guild, on_delete=models.CASCADE)

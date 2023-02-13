@@ -3,6 +3,20 @@ from asgiref.sync import sync_to_async
 from storage.serializers import TimeMapSerializer
 
 @sync_to_async
+def getFormat(uid):
+    qs = Member.objects.filter(member_id=uid) 
+    if (qs.count() > 0):
+        return str(qs[0].time_format)
+    else:
+        return "%H:%M on %d-%m-%Y"
+
+@sync_to_async
+def setFormat(uid, time_format):
+    member, created = Member.objects.update_or_create(member_id=uid,defaults={
+        "time_format":time_format})
+    return created
+
+@sync_to_async
 def getDefaultTimezone(uid):
     qs = Member.objects.filter(member_id=uid) 
     if (qs.count() > 0):
