@@ -56,7 +56,7 @@ async def timeHandler(message):
             today = datetime.datetime.now(tz=fromTimeZone)
             fromTime = fromTimeZone.localize(datetime.datetime(year=today.year, month=today.month, day=today.day, hour=hour, minute=minute))
             toTime = fromTime.astimezone(toTimeZone)
-            content = f"When it is {timeString} in {cityToConvertFrom} it will be " + toTime.strftime("%H:%M") + " in " + cityToConvertTo
+            content = f"When it is {fromTime.strftime(timeFormat)} in {cityToConvertFrom} it will be " + toTime.strftime(timeFormat) + " in " + cityToConvertTo
             await message.channel.send(content)
         else:
             cityToConvertFrom = await getDefaultTimezone(message.author.id)
@@ -81,7 +81,7 @@ async def timeHandler(message):
             fromTime = fromTimeZone.localize(datetime.datetime(year=today.year, month=today.month, day=today.day, hour=hour, minute=minute))
             toTime = fromTime.astimezone(toTimeZone)
             fromCity = cityToConvertFrom.split("/")[1]
-            content = f"When it is {timeString} in {fromCity} it will be " + toTime.strftime("%H:%M") + " in " + cityToConvertTo
+            content = f"When it is {fromTime.strftime(timeFormat)} in {fromCity} it will be " + toTime.strftime(timeFormat) + " in " + cityToConvertTo
             await message.channel.send(content)
             
             
