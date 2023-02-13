@@ -140,7 +140,9 @@ async def timeHandler(message):
             %A is the long day of the week eg. Tuesday\n
             %a is the short day of the week eg. Tue\n\n
             The default example is %H:%M on %d-%m-%Y
-            Here is the reference: https://www.w3schools.com/python/python_datetime.asp 
+            You can always use ,time format default
+            to get back to the default time format\n
+            Here is the reference: https://www.w3schools.com/python/python_datetime.asp#The-strftime()-Method
                                 """
                 await message.channel.send(content)
             elif (instruction[2] == "default"):
