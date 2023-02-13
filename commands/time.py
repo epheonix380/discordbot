@@ -6,6 +6,8 @@ from helpers.timeStrore import getDefaultTimezone, setDefaultTimezone, addTimezo
 async def timeHandler(message):
     instruction = str(message.content).strip().split(" ")
     timeFormat = await getFormat(message.author.id)
+    firstInstruction = "ball"
+    print(len(instruction))
     if (len(instruction) == 1):
         #,time
         content = ""
@@ -26,14 +28,18 @@ async def timeHandler(message):
 
     elif (len(instruction) >= 4 and instruction[1] == "convert"):
         #,time convert 12:00 Singapore to Bangkok
-        
+        userInAll = re.search("\d{18}",message.content)
         newContent = " ".join(instruction[2::])
+        timeStringRaw = re.search("\d?\d\:\d\d(am)?(pm)?",newContent)
+        if (timeStringRaw is None):
+            content = "Time not found please specify a time using : between the hours and mintues like 13:00 or 01:00pm"
+            return await message.channel.send(content)
         if ("to" in newContent):
             cities = newContent.split(" to ")
             cityToConvertTo = cities[1]
             toCode = ""
             fromCode = ""
-            timeString =  re.match("\d?\d\:\d\d(am)?(pm)?",cities[0]).group(0)
+            timeString =  timeStringRaw.group(0)
             cityToConvertFrom = re.sub("\d?\d\:\d\d(am)?(pm)?","",cities[0]).strip()
             from pytz import all_timezones
             for timezone in all_timezones:
@@ -57,7 +63,7 @@ async def timeHandler(message):
             if (cityToConvertFrom is None):
                 content = "No default timezone found:\nThis version of the command requires you to set a default timezone if you do not want to set one you can use this command instead:\n```,time convert <time> <from-city-name> to <to-city-name>```\nOr you can set your default timezone using this command:\n```,time default <city-name>```"
                 return await message.channel.send(content)
-            timeString =  re.match("\d?\d\:\d\d(am)?(pm)?",newContent).group(0)
+            timeString =  timeStringRaw.group(0)
             cityToConvertTo = re.sub("\d?\d\:\d\d(am)?(pm)?","",newContent).strip()
             from pytz import all_timezones
             for timezone in all_timezones:
@@ -84,6 +90,9 @@ async def timeHandler(message):
         #,time Bangkok
         # But also ,time New York
         # But also ,time noneSenseValueHere
+        firstInstruction = re.search("\d{18}",instruction[1])
+        print(instruction[1])
+        print(firstInstruction)
         if (instruction[1] == "default"):
             if (len(instruction)==2):
                 default = await getDefaultTimezone(message.author.id)
@@ -158,6 +167,18 @@ async def timeHandler(message):
                 await message.channel.send(content)
 
 
+        elif (firstInstruction is not None and firstInstruction.group(0) != ""):
+            uid = firstInstruction.group(0)
+            timezone = await getDefaultTimezone(uid)
+            content = ""
+            if timezone is not None:
+                timeZone = pytz.timezone(timezone)
+                convertedTime = datetime.datetime.now().astimezone(timeZone)
+                content = f"Time for <@___REPLACE___STRING___> is " + convertedTime.strftime(timeFormat)
+            else:
+                content = f"User <@___REPLACE___STRING___> does not have a default timezone set"
+            sentMessage = await message.channel.send(content)
+            await sentMessage.edit(content=re.sub("\_\_\_REPLACE\_\_\_STRING\_\_\_",str(uid),sentMessage.content))
 
         else:
             timeZone = pytz.utc
@@ -169,7 +190,7 @@ async def timeHandler(message):
             convertedTime = datetime.datetime.now().astimezone(timeZone)
             content = f"Time in {city} is " + convertedTime.strftime(timeFormat)
             await message.channel.send(content)
-        
+        print(firstInstruction)
     await message.delete()
 
         
