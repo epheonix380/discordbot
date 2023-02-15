@@ -4,7 +4,7 @@ import re
 
 async def manual_nsfw(message):
     if (message.reference and message.reference.resolved):
-
+        print("insignificant change")
         i = 0
         files = []
         for thing in message.reference.resolved.attachments:
