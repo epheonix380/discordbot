@@ -36,16 +36,16 @@ async def timeHandler(message):
             return await message.channel.send(content)
         if ("to" in newContent):
             cities = newContent.split(" to ")
-            cityToConvertTo = cities[1]
+            cityToConvertTo = "_".join(cities[1].split(" "))
             toCode = ""
             fromCode = ""
             timeString =  timeStringRaw.group(0)
-            cityToConvertFrom = re.sub("\d?\d\:\d\d(am)?(pm)?","",cities[0]).strip()
+            cityToConvertFrom = "_".join(re.sub("\d?\d\:\d\d(am)?(pm)?","",cities[0]).strip().split(" "))
             from pytz import all_timezones
             for timezone in all_timezones:
-                if cityToConvertTo in timezone:
+                if cityToConvertTo.lower() in timezone.lower():
                     toCode = timezone
-                if cityToConvertFrom in timezone:
+                if cityToConvertFrom.lower() in timezone.lower():
                     fromCode = timezone
             hour = int(timeString.split(":")[0])
             minute = int(timeString.split(":")[1][0:2])
@@ -64,12 +64,12 @@ async def timeHandler(message):
                 content = "No default timezone found:\nThis version of the command requires you to set a default timezone if you do not want to set one you can use this command instead:\n```,time convert <time> <from-city-name> to <to-city-name>```\nOr you can set your default timezone using this command:\n```,time default <city-name>```"
                 return await message.channel.send(content)
             timeString =  timeStringRaw.group(0)
-            cityToConvertTo = re.sub("\d?\d\:\d\d(am)?(pm)?","",newContent).strip()
+            cityToConvertTo = "_".join(re.sub("\d?\d\:\d\d(am)?(pm)?","",newContent).strip().split(" "))
             from pytz import all_timezones
             for timezone in all_timezones:
-                if cityToConvertTo in timezone:
+                if cityToConvertTo.lower() in timezone.lower():
                     toCode = timezone
-                if cityToConvertFrom in timezone:
+                if cityToConvertFrom.lower() in timezone.lower():
                     fromCode = timezone
             hour = int(timeString.split(":")[0])
             minute = int(timeString.split(":")[1][0:2])
@@ -100,20 +100,20 @@ async def timeHandler(message):
                     default = "No defaults found, please use ,time default <City name> to set a default"
                 await message.channel.send(default)
             else:
-                city = "".join(instruction[2::]).strip()
+                city = "_".join(instruction[2::]).strip()
                 tempTimeZone = ""
                 from pytz import all_timezones
                 for timezone in all_timezones:
-                    if city in timezone:
+                    if city.lower() in timezone.lower():
                         tempTimeZone = timezone
                         timeZone = pytz.timezone(timezone)
                 await setDefaultTimezone(message.author.id, tempTimeZone)  
         elif (instruction[1] == "add"):
-            city = "".join(instruction[2::]).strip()
+            city = "_".join(instruction[2::]).strip()
             tempTimeZone = ""
             from pytz import all_timezones
             for timezone in all_timezones:
-                if city in timezone:
+                if city.lower() in timezone.lower():
                     tempTimeZone = timezone
                     timeZone = pytz.timezone(timezone)
             created = await addTimezone(message.author.id, tempTimeZone)  
@@ -122,11 +122,11 @@ async def timeHandler(message):
             else:
                 await message.channel.send("There was an error")
         elif (instruction[1] == "remove"):
-            city = "".join(instruction[2::]).strip()
+            city = "_".join(instruction[2::]).strip()
             tempTimeZone = ""
             from pytz import all_timezones
             for timezone in all_timezones:
-                if city in timezone:
+                if city.lower() in timezone.lower():
                     tempTimeZone = timezone
                     timeZone = pytz.timezone(timezone)
             created = await removeTimezone(message.author.id, tempTimeZone)  
@@ -182,10 +182,10 @@ async def timeHandler(message):
 
         else:
             timeZone = pytz.utc
-            city = "".join(instruction[1::]).strip()
+            city = "_".join(instruction[1::]).strip()
             from pytz import all_timezones
             for timezone in all_timezones:
-                if city in timezone:
+                if city.lower() in timezone.lower():
                     timeZone = pytz.timezone(timezone)
             convertedTime = datetime.datetime.now().astimezone(timeZone)
             content = f"Time in {city} is " + convertedTime.strftime(timeFormat)
