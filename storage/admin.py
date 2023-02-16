@@ -2,22 +2,22 @@ from django.contrib import admin
 from .models import Guild, Member, GuildMemberMap, TimeZone, MemberTimeZoneMap, BotIgnoreChannels
 
 # Register your models here.
-class GuildAdmin(admin.ModelAdmin):
+class GuildAdmin(admin.ModelAdmin):# pylint: disable=missing-class-docstring
     list_display = ('guild_id', 'nsfw_channel')
 
-class MemberAdmin(admin.ModelAdmin):
+class MemberAdmin(admin.ModelAdmin):# pylint: disable=missing-class-docstring
     list_display = ('member_id', 'time_zone')
 
-class GuildMemberMapAdmin(admin.ModelAdmin):
+class GuildMemberMapAdmin(admin.ModelAdmin):# pylint: disable=missing-class-docstring
     list_display = ('guild', 'member')
 
-class TimeZoneAdmin(admin.ModelAdmin):
+class TimeZoneAdmin(admin.ModelAdmin):# pylint: disable=missing-class-docstring
     list_display = ('time_zone',)
 
-class MemberTimeZoneMapAdmin(admin.ModelAdmin):
+class MemberTimeZoneMapAdmin(admin.ModelAdmin):# pylint: disable=missing-class-docstring
     list_display = ('member', 'time_zone')
 
-class BotIgnoreChannelsAdmin(admin.ModelAdmin):
+class BotIgnoreChannelsAdmin(admin.ModelAdmin):# pylint: disable=missing-class-docstring
     list_display = ('channel_id', 'guild')
 
 admin.site.register(Guild,GuildAdmin)

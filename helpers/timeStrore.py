@@ -3,7 +3,7 @@ from asgiref.sync import sync_to_async
 from storage.serializers import TimeMapSerializer
 
 @sync_to_async
-def getFormat(uid):
+def getFormat(uid):# pylint: disable=missing-function-docstring
     qs = Member.objects.filter(member_id=uid) # pylint: disable=maybe-no-member
     if (qs.count() > 0):
         return str(qs[0].time_format)
@@ -11,14 +11,14 @@ def getFormat(uid):
         return "%H:%M on %d-%m-%Y"
 
 @sync_to_async
-def setFormat(uid, time_format):
+def setFormat(uid, time_format):# pylint: disable=missing-function-docstring
     member, created = Member.objects.update_or_create(member_id=uid,defaults={# pylint: disable=maybe-no-member
         "time_format":time_format})
     print(member)
     return created
 
 @sync_to_async
-def getDefaultTimezone(uid):
+def getDefaultTimezone(uid):# pylint: disable=missing-function-docstring
     qs = Member.objects.filter(member_id=uid) # pylint: disable=maybe-no-member
     if (qs.count() > 0):
         return str(qs[0].time_zone.time_zone)
@@ -26,7 +26,7 @@ def getDefaultTimezone(uid):
         return None
 
 @sync_to_async
-def setDefaultTimezone(uid, timezone):
+def setDefaultTimezone(uid, timezone):# pylint: disable=missing-function-docstring
     time_zone, timeCreate = TimeZone.objects.update_or_create(time_zone=str(timezone))# pylint: disable=maybe-no-member
     member, created = Member.objects.update_or_create(member_id=uid,defaults={# pylint: disable=maybe-no-member
         'time_zone':time_zone
@@ -34,14 +34,14 @@ def setDefaultTimezone(uid, timezone):
     return created
 
 @sync_to_async
-def addTimezone(uid, timezone):
+def addTimezone(uid, timezone):# pylint: disable=missing-function-docstring
     member, memberCreated = Member.objects.get_or_create(member_id=uid)# pylint: disable=maybe-no-member
     time_zone, timeCreated = TimeZone.objects.update_or_create(time_zone=str(timezone))# pylint: disable=maybe-no-member
     timeMap, timeMapCreated = MemberTimeZoneMap.objects.update_or_create(member=member, time_zone=time_zone)# pylint: disable=maybe-no-member
     return timeMapCreated
 
 @sync_to_async
-def removeTimezone(uid, timezone):
+def removeTimezone(uid, timezone):# pylint: disable=missing-function-docstring
     time_zone, timeCreated = TimeZone.objects.update_or_create(time_zone=str(timezone))# pylint: disable=maybe-no-member
     member, memberCreated = Member.objects.get_or_create(member_id=uid)# pylint: disable=maybe-no-member
     qs = MemberTimeZoneMap.objects.filter(member=member, time_zone=time_zone)# pylint: disable=maybe-no-member
@@ -51,7 +51,7 @@ def removeTimezone(uid, timezone):
     return False
 
 @sync_to_async
-def getTimezones(uid):
+def getTimezones(uid):# pylint: disable=missing-function-docstring
     member, memberCreated = Member.objects.get_or_create(member_id=uid)# pylint: disable=maybe-no-member
     qs = MemberTimeZoneMap.objects.filter(member=member)# pylint: disable=maybe-no-member
     data = TimeMapSerializer(qs,many=True).data

@@ -39,6 +39,6 @@ class MemberTimeZoneMap(models.Model):
 
 class BotIgnoreChannels(models.Model):
     '''Class represents BotIgnoreChannels'''
-    
     channel_id = models.CharField(max_length=18, unique=True)
     guild = models.ForeignKey(Guild, on_delete=models.CASCADE)
+    
