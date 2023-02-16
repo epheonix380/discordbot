@@ -7,7 +7,6 @@ async def timeHandler(message):
     instruction = str(message.content).strip().split(" ")
     timeFormat = await getFormat(message.author.id)
     firstInstruction = "ball"
-    print(len(instruction))
     if (len(instruction) == 1):
         #,time
         content = ""
@@ -91,8 +90,6 @@ async def timeHandler(message):
         # But also ,time New York
         # But also ,time noneSenseValueHere
         firstInstruction = re.search("\d{18}",instruction[1])
-        print(instruction[1])
-        print(firstInstruction)
         if (instruction[1] == "default"):
             if (len(instruction)==2):
                 default = await getDefaultTimezone(message.author.id)
@@ -190,7 +187,6 @@ async def timeHandler(message):
             convertedTime = datetime.datetime.now().astimezone(timeZone)
             content = f"Time in {city} is " + convertedTime.strftime(timeFormat)
             await message.channel.send(content)
-        print(firstInstruction)
     await message.delete()
 
         
