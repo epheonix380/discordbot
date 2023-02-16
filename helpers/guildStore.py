@@ -3,7 +3,7 @@ from asgiref.sync import sync_to_async
 
 @sync_to_async
 def getNSFWChannel(uid):
-    qs = Guild.objects.filter(guild_id=uid) 
+    qs = Guild.objects.filter(guild_id=uid) # pylint: disable=maybe-no-member
     if (qs.count() > 0):
         return str(qs[0].nsfw_channel)
     else:
@@ -11,7 +11,7 @@ def getNSFWChannel(uid):
 
 @sync_to_async
 def setNSFWChannel(uid, channelID):
-    member, created = Guild.objects.update_or_create(guild_id=uid,defaults={
+    member, created = Guild.objects.update_or_create(guild_id=uid,defaults={ # pylint: disable=maybe-no-member
         'nsfw_channel':str(channelID)
     })
     return created

@@ -4,7 +4,7 @@ from storage.serializers import TimeMapSerializer
 
 @sync_to_async
 def getFormat(uid):
-    qs = Member.objects.filter(member_id=uid) 
+    qs = Member.objects.filter(member_id=uid) # pylint: disable=maybe-no-member
     if (qs.count() > 0):
         return str(qs[0].time_format)
     else:
@@ -12,13 +12,14 @@ def getFormat(uid):
 
 @sync_to_async
 def setFormat(uid, time_format):
-    member, created = Member.objects.update_or_create(member_id=uid,defaults={
+    member, created = Member.objects.update_or_create(member_id=uid,defaults={# pylint: disable=maybe-no-member
         "time_format":time_format})
+    print(member)
     return created
 
 @sync_to_async
 def getDefaultTimezone(uid):
-    qs = Member.objects.filter(member_id=uid) 
+    qs = Member.objects.filter(member_id=uid) # pylint: disable=maybe-no-member
     if (qs.count() > 0):
         return str(qs[0].time_zone.time_zone)
     else:
@@ -26,24 +27,24 @@ def getDefaultTimezone(uid):
 
 @sync_to_async
 def setDefaultTimezone(uid, timezone):
-    time_zone, timeCreate = TimeZone.objects.update_or_create(time_zone=str(timezone))
-    member, created = Member.objects.update_or_create(member_id=uid,defaults={
+    time_zone, timeCreate = TimeZone.objects.update_or_create(time_zone=str(timezone))# pylint: disable=maybe-no-member
+    member, created = Member.objects.update_or_create(member_id=uid,defaults={# pylint: disable=maybe-no-member
         'time_zone':time_zone
     })
     return created
 
 @sync_to_async
 def addTimezone(uid, timezone):
-    member, memberCreated = Member.objects.get_or_create(member_id=uid)
-    time_zone, timeCreated = TimeZone.objects.update_or_create(time_zone=str(timezone))
-    timeMap, timeMapCreated = MemberTimeZoneMap.objects.update_or_create(member=member, time_zone=time_zone)
+    member, memberCreated = Member.objects.get_or_create(member_id=uid)# pylint: disable=maybe-no-member
+    time_zone, timeCreated = TimeZone.objects.update_or_create(time_zone=str(timezone))# pylint: disable=maybe-no-member
+    timeMap, timeMapCreated = MemberTimeZoneMap.objects.update_or_create(member=member, time_zone=time_zone)# pylint: disable=maybe-no-member
     return timeMapCreated
 
 @sync_to_async
 def removeTimezone(uid, timezone):
-    time_zone, timeCreated = TimeZone.objects.update_or_create(time_zone=str(timezone))
-    member, memberCreated = Member.objects.get_or_create(member_id=uid)
-    qs = MemberTimeZoneMap.objects.filter(member=member, time_zone=time_zone)
+    time_zone, timeCreated = TimeZone.objects.update_or_create(time_zone=str(timezone))# pylint: disable=maybe-no-member
+    member, memberCreated = Member.objects.get_or_create(member_id=uid)# pylint: disable=maybe-no-member
+    qs = MemberTimeZoneMap.objects.filter(member=member, time_zone=time_zone)# pylint: disable=maybe-no-member
     if (qs.count()>0):
         qs[0].delete()
         return True
@@ -51,8 +52,8 @@ def removeTimezone(uid, timezone):
 
 @sync_to_async
 def getTimezones(uid):
-    member, memberCreated = Member.objects.get_or_create(member_id=uid)
-    qs = MemberTimeZoneMap.objects.filter(member=member)
+    member, memberCreated = Member.objects.get_or_create(member_id=uid)# pylint: disable=maybe-no-member
+    qs = MemberTimeZoneMap.objects.filter(member=member)# pylint: disable=maybe-no-member
     data = TimeMapSerializer(qs,many=True).data
     return data
     
