@@ -1,5 +1,10 @@
 from rest_framework import serializers
-from .models import MemberTimeZoneMap, TimeZone
+from .models import MemberTimeZoneMap, TimeZone, Item
+
+class ItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Item
+        fields = ['name']
 
 class TimezoneSerializer(serializers.ModelSerializer):
     class Meta:

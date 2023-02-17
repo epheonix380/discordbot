@@ -24,6 +24,14 @@ class MemberTimeZoneMap(models.Model):
     member = models.ForeignKey(Member, on_delete=models.CASCADE)
     time_zone = models.ForeignKey(TimeZone, on_delete=models.CASCADE)
 
+class ListOfChoices(models.Model):
+    member = models.ForeignKey(Member, on_delete=models.CASCADE)
+    last_used = models.DateTimeField(auto_now=True)
+
+class Item(models.Model):
+    list = models.ForeignKey(ListOfChoices, on_delete=models.CASCADE)
+    name = models.CharField(max_length=128)
+
 class BotIgnoreChannels(models.Model):
     channel_id = models.CharField(max_length=18, unique=True)
     guild = models.ForeignKey(Guild, on_delete=models.CASCADE)
