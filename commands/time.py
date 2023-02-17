@@ -27,17 +27,66 @@ async def timeHandler(message):
 
     elif (len(instruction) >= 4 and instruction[1] == "convert"):
         #,time convert 12:00 Singapore to Bangkok
-        userInAll = re.search("\d{18}",message.content)
+        userInAll = re.findall("\d{18}",message.content)
+        user_timezone_1 = None
+        user_timezone_2 = None
+        print(userInAll)
+        if (userInAll is not None and len(userInAll) > 0):
+            print("A")
+            if len(userInAll) > 1:
+                print("B")
+
+                user_timezone_1 = await getDefaultTimezone(userInAll[1])
+            user_timezone_2 = await getDefaultTimezone(userInAll[0])
+            if user_timezone_2 is None:
+                content = "No default timezone found for the user you specified\nThis version of the command requires a default timezone you can use this command instead:\n```,time convert <time> <from-city-name> to <to-city-name>```\nOr you can set your default timezone using this command:\n```,time default <city-name>```"
+                return await message.channel.send(content)
+            if user_timezone_1 is None:
+                print("C")
+
+                user_timezone_1 = await getDefaultTimezone(message.author.id)
+                if user_timezone_1 is None:
+                    print("D")
+                    content = "No default timezone found:\nThis version of the command requires you to set a default timezone if you do not want to set one you can use this command instead:\n```,time convert <time> <from-city-name> to <to-city-name>```\nOr you can set your default timezone using this command:\n```,time default <city-name>```"
+                    return await message.channel.send(content)
+            else:
+                print("E")
+                temp = user_timezone_1
+                user_timezone_1 = user_timezone_2
+                user_timezone_2 = temp
+            print("F")
+        print("G")
         newContent = " ".join(instruction[2::])
         timeStringRaw = re.search("\d?\d\:\d\d(am)?(pm)?",newContent)
         if (timeStringRaw is None):
             content = "Time not found please specify a time using : between the hours and mintues like 13:00 or 01:00pm"
             return await message.channel.send(content)
-        if ("to" in newContent):
+        if user_timezone_1 is not None and user_timezone_2 is not None:
+            toCode = None
+            fromCode = None
+            timeString =  timeStringRaw.group(0)
+            from pytz import all_timezones
+            for timezone in all_timezones:
+                if user_timezone_2.lower() in timezone.lower():
+                    toCode = timezone
+                if user_timezone_1.lower() in timezone.lower():
+                    fromCode = timezone
+            hour = int(timeString.split(":")[0])
+            minute = int(timeString.split(":")[1][0:2])
+            if (len(timeString.split(":")[1])==4 and timeString.split(":")[1][2:4].lower()=="pm"):
+                hour = (hour + 12)%24
+            fromTimeZone = pytz.timezone(fromCode)
+            toTimeZone = pytz.timezone(toCode)
+            today = datetime.datetime.now(tz=fromTimeZone)
+            fromTime = fromTimeZone.localize(datetime.datetime(year=today.year, month=today.month, day=today.day, hour=hour, minute=minute))
+            toTime = fromTime.astimezone(toTimeZone)
+            content = f"When it is {fromTime.strftime(timeFormat)} in {user_timezone_1} it will be " + toTime.strftime(timeFormat) + " in " + user_timezone_2
+            await message.channel.send(content)
+        elif ("to" in newContent):
             cities = newContent.split(" to ")
             cityToConvertTo = "_".join(cities[1].split(" "))
-            toCode = ""
-            fromCode = ""
+            toCode = "gmt"
+            fromCode = "gmt"
             timeString =  timeStringRaw.group(0)
             cityToConvertFrom = "_".join(re.sub("\d?\d\:\d\d(am)?(pm)?","",cities[0]).strip().split(" "))
             from pytz import all_timezones
@@ -58,6 +107,8 @@ async def timeHandler(message):
             content = f"When it is {fromTime.strftime(timeFormat)} in {cityToConvertFrom} it will be " + toTime.strftime(timeFormat) + " in " + cityToConvertTo
             await message.channel.send(content)
         else:
+            toCode = "gmt"
+            fromCode = "gmt"
             cityToConvertFrom = await getDefaultTimezone(message.author.id)
             if (cityToConvertFrom is None):
                 content = "No default timezone found:\nThis version of the command requires you to set a default timezone if you do not want to set one you can use this command instead:\n```,time convert <time> <from-city-name> to <to-city-name>```\nOr you can set your default timezone using this command:\n```,time default <city-name>```"
