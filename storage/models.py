@@ -26,6 +26,7 @@ class MemberTimeZoneMap(models.Model):
 
 class ListOfChoices(models.Model):
     member = models.ForeignKey(Member, on_delete=models.CASCADE)
+    name = models.CharField(max_length=64, unique=True, null=True, default=None)
     last_used = models.DateTimeField(auto_now=True)
 
 class Item(models.Model):
