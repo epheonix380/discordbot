@@ -18,7 +18,7 @@ client = discord.Client(intents=intents)
 from commands.nsfw import manual_nsfw
 from commands.time import timeHandler
 from commands.admin import admin
-from commands.choices import choices
+from commands.choices import choices, saveChoices
 from helpers.getNSFWChannel import getNSFWChannel
 
 @client.event
@@ -47,6 +47,8 @@ async def on_message(message):
         await admin(message=message)
     elif message.content.startswith(",choose"):
         await choices(message=message)
+    elif message.content.startswith(",choices"):
+        await saveChoices(message=message)
     elif message.content.startswith(','):
         await message.channel.send("That is our prefix!")
 
