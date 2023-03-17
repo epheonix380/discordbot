@@ -4,6 +4,12 @@ TIMEZONES = tuple(zip(pytz.all_timezones, pytz.all_timezones))
 
 # Create your models here.
 
+class GuessTheHero(models.Model):
+    guild_id = models.CharField(max_length=18)
+    channel_id = models.CharField(max_length=18)
+    image_url = models.CharField(max_length=256)
+    hero_name = models.CharField(max_length=64)
+
 class Guild(models.Model):
     guild_id = models.CharField(max_length=18, unique=True)
     nsfw_channel = models.CharField(max_length=18, null=True, blank=True, default=None)

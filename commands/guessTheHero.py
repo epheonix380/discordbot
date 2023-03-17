@@ -1,0 +1,6 @@
+
+
+
+
+async def guessTheHeroHandler(message):
+    
