@@ -6,7 +6,7 @@ TIMEZONES = tuple(zip(pytz.all_timezones, pytz.all_timezones))
 
 class GuessTheHero(models.Model):
     guild_id = models.CharField(max_length=18)
-    channel_id = models.CharField(max_length=18)
+    created_at = models.DateTimeField(auto_now_add=True)
     image_url = models.CharField(max_length=256)
     hero_name = models.CharField(max_length=64)
 
