@@ -42,8 +42,7 @@ async def on_message(message):
         elif len(arr) != 0:
             await handel_regex_nsfw(message)
     guessTheHeroChannel = await getGuessTheHeroChannel(message.guild.id)
-    print(guessTheHeroChannel[2:-1:1])
-    if (str(guessTheHeroChannel)[2:-1:1] == str(message.channel.id)):
+    if (guessTheHeroChannel is not None and str(guessTheHeroChannel)[2:-1:1] == str(message.channel.id)):
         print("success")
         await guessTheHeroHandler(message=message)
     if message.content.startswith(",nsfw"):
