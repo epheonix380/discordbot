@@ -1,4 +1,4 @@
-from helpers.guildStore import getNSFWChannel, setNSFWChannel
+from helpers.guildStore import getNSFWChannel, setNSFWChannel, getGuessTheHeroChannel, setGuessTheHeroChannel
 
 
 async def admin(message):
@@ -12,3 +12,12 @@ async def admin(message):
         else:
             channelID = instruction[2]
             await setNSFWChannel(message.guild.id, channelID) 
+    if (instruction[1] == "guessTheHero"):
+        if (len(instruction)==2):
+            default = await getGuessTheHeroChannel(message.guild.id)
+            if default is None:
+                default = "No guessTheHero channel found, please use ,admin guessTheHero <channel id> to set the channel"
+            await message.channel.send(default)
+        else:
+            channelID = instruction[2]
+            await setGuessTheHeroChannel(message.guild.id, channelID) 

@@ -18,8 +18,10 @@ client = discord.Client(intents=intents)
 from commands.nsfw import manual_nsfw
 from commands.time import timeHandler
 from commands.admin import admin
+from commands.ticTacToe import tic
+from commands.guessTheHero import guessTheHeroHandler
 from commands.choices import choices, saveChoices
-from helpers.getNSFWChannel import getNSFWChannel
+from helpers.guildStore import getNSFWChannel, getGuessTheHeroChannel
 
 @client.event
 async def on_ready():
@@ -39,6 +41,11 @@ async def on_message(message):
             await handle_nsfw(message)
         elif len(arr) != 0:
             await handel_regex_nsfw(message)
+    guessTheHeroChannel = await getGuessTheHeroChannel(message.guild.id)
+    print(guessTheHeroChannel[2:-1:1])
+    if (str(guessTheHeroChannel)[2:-1:1] == str(message.channel.id)):
+        print("success")
+        await guessTheHeroHandler(message=message)
     if message.content.startswith(",nsfw"):
         await manual_nsfw(message=message)
     elif message.content.startswith(",time"):
@@ -49,8 +56,12 @@ async def on_message(message):
         await choices(message=message)
     elif message.content.startswith(",choices"):
         await saveChoices(message=message)
+    elif message.content.startswith(",test"):
+        await guessTheHeroHandler(message=message)
     elif message.content.startswith(','):
         await message.channel.send("That is our prefix!")
+    
+
 
 
     
