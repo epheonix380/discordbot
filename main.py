@@ -36,7 +36,7 @@ async def on_message(message):
     if str(message.author.id) == "845668514341191750":
         return
     nsfwChannel = await getNSFWChannel(message.guild.id)
-    if (str(nsfwChannel) != str(message.channel.id)):
+    if (nsfwChannel is None or str(nsfwChannel)[2:-1:1] != str(message.channel.id)):
         if message.attachments: #or len(message.embeds)>0:
             await handle_nsfw(message)
         elif len(arr) != 0:
