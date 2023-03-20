@@ -60,7 +60,7 @@ async def guessTheHeroHandler(message):
         pk = await setHeroImage(guild_id, url)
         view = VerificationView(pk=pk)
         channel = await message.author.create_dm()
-        await channel.send("A guess the hero image was detected, do you wish to input the hero name?", view=view)
+        await channel.send(f"A guess the hero image was detected, do you wish to input the hero name?\n{url}", view=view)
     else:
         name = await getHeroName(message.guild.id)
         arr = []
