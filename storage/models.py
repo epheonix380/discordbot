@@ -12,7 +12,7 @@ class GuessTheHero(models.Model):
 
 class Guild(models.Model):
     guild_id = models.CharField(max_length=18, unique=True)
-    guess_the_hero = models.CharField(max_length=18, null=True, blank=True, default=None)
+    guess_the_hero = models.CharField(max_length=20, null=True, blank=True, default=None)
     nsfw_channel = models.CharField(max_length=18, null=True, blank=True, default=None)
 
 class TimeZone(models.Model):
