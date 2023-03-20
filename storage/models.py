@@ -9,6 +9,7 @@ class GuessTheHero(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     image_url = models.CharField(max_length=256)
     hero_name = models.CharField(max_length=64, default="")
+    guessed = models.BooleanField(default=False)
 
 class Guild(models.Model):
     guild_id = models.CharField(max_length=18, unique=True)

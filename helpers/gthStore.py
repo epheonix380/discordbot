@@ -14,6 +14,23 @@ def setHeroName(pk, hero_name):
     gth.save()
 
 @sync_to_async
+def setHeroGuessed(guild_id):
+    qs = GuessTheHero.objects.filter(guild_id=guild_id).order_by("-created_at")
+    if (qs.count() > 0):
+        pk = qs[0].pk
+        gth = GuessTheHero.objects.get(pk=pk)
+        gth.guessed = True
+        gth.save()
+
+@sync_to_async
+def getHeroGuessed(guild_id):
+    qs = GuessTheHero.objects.filter(guild_id=guild_id).order_by("-created_at")
+    if (qs.count() > 0):
+        return qs[0].guessed
+    else:
+        return False
+
+@sync_to_async
 def getHeroName(guild_id):
     qs = GuessTheHero.objects.filter(guild_id=guild_id).order_by("-created_at")
     if (qs.count() > 0):

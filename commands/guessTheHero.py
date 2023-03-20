@@ -3,7 +3,7 @@ import discord
 from discord import ui
 from discord import ButtonStyle
 from discord.ui.text_input import TextStyle
-from helpers.gthStore import setHeroImage, setHeroName, getHeroName
+from helpers.gthStore import setHeroImage, setHeroName, getHeroName, setHeroGuessed, getHeroImage,getHeroGuessed
 
 class GuessTheHeroInput(ui.Modal, title='Guess The Hero Name'):
     name = ui.TextInput(label='Name')
@@ -47,10 +47,14 @@ class VerificationView(ui.View):
 
 async def guessTheHeroHandler(message):
     arr = []
+    instruction = str(message.content).strip().split(" ")
     for match in re.finditer("https?\:\S+\.(png)|https?\:\S+\.(jpg)|https?\:\S+\.(jpeg)|https?\:\S+\.(gif)", message.content):
         if match.group(0) is not None:
             arr.append(match.group(0))
-    if message.attachments or len(arr) > 0:
+    if len(instruction) == 1 and instruction[0] == ",refresh":
+        url = await getHeroImage(message.guild.id)
+        await message.channel.send(url)
+    elif message.attachments or len(arr) > 0:
         url = ""
         if message.attachments:
             url = message.attachments[0].url
@@ -61,14 +65,15 @@ async def guessTheHeroHandler(message):
         view = VerificationView(pk=pk)
         channel = await message.author.create_dm()
         await channel.send(f"A guess the hero image was detected, do you wish to input the hero name?\n{url}", view=view)
-    else:
+    elif not await getHeroGuessed(message.guild.id):
         name = await getHeroName(message.guild.id)
         arr = []
         for match in re.finditer(f"{str(name).lower()}", str(message.content).lower()):
             if match.group(0) is not None:
                 arr.append(match.group(0))
         if (len(arr)>0):
+            await setHeroGuessed(message.guild.id)
             await message.reply(f"Correct the hero was {name}")
         else:
-            await message.reply(f"Incorrect")
+            await message.add_reaction("❌")
 
