@@ -17,6 +17,7 @@ psycopg2 = "*"
 djangorestframework = "*"
 markdown = "*"
 django-filter = "*"
+librespot = {git = "https://github.com/kokarare1212/librespot-python"}
 
 [dev-packages]
 
