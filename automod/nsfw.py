@@ -16,7 +16,8 @@ async def handle_nsfw(message):
             with open(f"SPOILER_{i}.png", "wb") as handler:
                 handler.write(img_data)
                 obj = classifier.classify(f"SPOILER_{i}.png")
-                if obj[f"SPOILER_{i}.png"]['safe']< 0.5:
+                if obj[f"SPOILER_{i}.png"]['safe']< 0.4 or (message.author.id == "226315767564599297" and obj[f"SPOILER_{i}.png"]['safe']< 0.75):
+                    
                     trigger = trigger and False
                     files.append(discord.File(f"SPOILER_{i}.png"))
                 else:
@@ -33,7 +34,8 @@ async def handle_nsfw(message):
             with open(f"SPOILER_{i}.png", "wb") as handler:
                 handler.write(img_data)
                 obj = classifier.classify(f"SPOILER_{i}.png")
-                if obj[f"SPOILER_{i}.png"]['safe']< 0.5:
+                if obj[f"SPOILER_{i}.png"]['safe']< 0.4 or (message.author.id == "226315767564599297" and obj[f"SPOILER_{i}.png"]['safe']< 0.75):
+                    
                     containsEmbeds = True
                     trigger = trigger and False
                     files.append(discord.File(f"SPOILER_{i}.png"))
@@ -76,7 +78,8 @@ async def handel_regex_nsfw(message):
                 with open(f"SPOILER_{i}.png", "wb") as handler:
                     handler.write(img_data)
                     obj = classifier.classify(f"SPOILER_{i}.png")
-                    if obj[f"SPOILER_{i}.png"]['safe']< 0.5:
+                    if obj[f"SPOILER_{i}.png"]['safe']< 0.4 or (message.author.id == "226315767564599297" and obj[f"SPOILER_{i}.png"]['safe']< 0.75):
+                        
                         containsEmbeds = True
                         trigger = trigger and False
                         files.append(discord.File(f"SPOILER_{i}.png"))
