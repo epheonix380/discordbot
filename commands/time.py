@@ -65,73 +65,79 @@ async def timeHandler(message):
             toCode = None
             fromCode = None
             timeString =  timeStringRaw.group(0)
+            content = "An error has occured, we retrieved timezone values from your accounts that are impossible."
             from pytz import all_timezones
             for timezone in all_timezones:
-                if user_timezone_2.lower() in timezone.lower():
+                if re.search(f"[\w\_]*\/{user_timezone_2.lower()}",timezone.lower()) is not None:
                     toCode = timezone
-                if user_timezone_1.lower() in timezone.lower():
+                if re.search(f"[\w\_]*\/{user_timezone_1.lower()}",timezone.lower()) is not None:
                     fromCode = timezone
-            hour = int(timeString.split(":")[0])
-            minute = int(timeString.split(":")[1][0:2])
-            if (len(timeString.split(":")[1])==4 and timeString.split(":")[1][2:4].lower()=="pm"):
-                hour = (hour + 12)%24
-            fromTimeZone = pytz.timezone(fromCode)
-            toTimeZone = pytz.timezone(toCode)
-            today = datetime.datetime.now(tz=fromTimeZone)
-            fromTime = fromTimeZone.localize(datetime.datetime(year=today.year, month=today.month, day=today.day, hour=hour, minute=minute))
-            toTime = fromTime.astimezone(toTimeZone)
-            content = f"When it is {fromTime.strftime(timeFormat)} in {user_timezone_1} it will be " + toTime.strftime(timeFormat) + " in " + user_timezone_2
+            if toCode is not None and fromCode is not None:
+                hour = int(timeString.split(":")[0])
+                minute = int(timeString.split(":")[1][0:2])
+                if (len(timeString.split(":")[1])==4 and timeString.split(":")[1][2:4].lower()=="pm"):
+                    hour = (hour + 12)%24
+                fromTimeZone = pytz.timezone(fromCode)
+                toTimeZone = pytz.timezone(toCode)
+                today = datetime.datetime.now(tz=fromTimeZone)
+                fromTime = fromTimeZone.localize(datetime.datetime(year=today.year, month=today.month, day=today.day, hour=hour, minute=minute))
+                toTime = fromTime.astimezone(toTimeZone)
+                content = f"When it is {fromTime.strftime(timeFormat)} in {user_timezone_1} it will be " + toTime.strftime(timeFormat) + " in " + user_timezone_2
             await message.channel.send(content)
         elif ("to" in newContent):
             cities = newContent.split(" to ")
             cityToConvertTo = "_".join(cities[1].split(" "))
-            toCode = "gmt"
-            fromCode = "gmt"
+            toCode = "DEFAULT"
+            fromCode = "DEFAULT"
             timeString =  timeStringRaw.group(0)
             cityToConvertFrom = "_".join(re.sub("\d?\d\:\d\d(am)?(pm)?","",cities[0]).strip().split(" "))
+            content = f"Error one of these city names wasn't found:\n**{cityToConvertFrom}**\n**{cityToConvertTo}**"
             from pytz import all_timezones
             for timezone in all_timezones:
-                if cityToConvertTo.lower() in timezone.lower():
+                if re.search(f"[\w\_]*\/{cityToConvertTo.lower()}",timezone.lower()) is not None:
                     toCode = timezone
-                if cityToConvertFrom.lower() in timezone.lower():
+                if re.search(f"[\w\_]*\/{cityToConvertFrom.lower()}",timezone.lower()) is not None:
                     fromCode = timezone
-            hour = int(timeString.split(":")[0])
-            minute = int(timeString.split(":")[1][0:2])
-            if (len(timeString.split(":")[1])==4 and timeString.split(":")[1][2:4].lower()=="pm"):
-                hour = (hour + 12)%24
-            fromTimeZone = pytz.timezone(fromCode)
-            toTimeZone = pytz.timezone(toCode)
-            today = datetime.datetime.now(tz=fromTimeZone)
-            fromTime = fromTimeZone.localize(datetime.datetime(year=today.year, month=today.month, day=today.day, hour=hour, minute=minute))
-            toTime = fromTime.astimezone(toTimeZone)
-            content = f"When it is {fromTime.strftime(timeFormat)} in {cityToConvertFrom} it will be " + toTime.strftime(timeFormat) + " in " + cityToConvertTo
+            if toCode != "DEFAULT" and fromCode != "DEFAUT":               
+                hour = int(timeString.split(":")[0])
+                minute = int(timeString.split(":")[1][0:2])
+                if (len(timeString.split(":")[1])==4 and timeString.split(":")[1][2:4].lower()=="pm"):
+                    hour = (hour + 12)%24
+                fromTimeZone = pytz.timezone(fromCode)
+                toTimeZone = pytz.timezone(toCode)
+                today = datetime.datetime.now(tz=fromTimeZone)
+                fromTime = fromTimeZone.localize(datetime.datetime(year=today.year, month=today.month, day=today.day, hour=hour, minute=minute))
+                toTime = fromTime.astimezone(toTimeZone)
+                content = f"When it is {fromTime.strftime(timeFormat)} in {cityToConvertFrom} it will be " + toTime.strftime(timeFormat) + " in " + cityToConvertTo
             await message.channel.send(content)
         else:
-            toCode = "gmt"
-            fromCode = "gmt"
+            toCode = "DEFAULT"
+            fromCode = "DEFAULT"
             cityToConvertFrom = await getDefaultTimezone(message.author.id)
+            cityToConvertTo = "_".join(re.sub("\d?\d\:\d\d(am)?(pm)?","",newContent).strip().split(" "))
+            content = f"Error one of these city names wasn't found:\n**{cityToConvertFrom}**\n**{cityToConvertTo}**"
             if (cityToConvertFrom is None):
                 content = "No default timezone found:\nThis version of the command requires you to set a default timezone if you do not want to set one you can use this command instead:\n```,time convert <time> <from-city-name> to <to-city-name>```\nOr you can set your default timezone using this command:\n```,time default <city-name>```"
                 return await message.channel.send(content)
             timeString =  timeStringRaw.group(0)
-            cityToConvertTo = "_".join(re.sub("\d?\d\:\d\d(am)?(pm)?","",newContent).strip().split(" "))
             from pytz import all_timezones
             for timezone in all_timezones:
-                if cityToConvertTo.lower() in timezone.lower():
+                if re.search(f"[\w\_]*\/{cityToConvertTo.lower()}",timezone.lower()) is not None:
                     toCode = timezone
-                if cityToConvertFrom.lower() in timezone.lower():
+                if re.search(f"[\w\_]*\/{cityToConvertFrom.lower()}",timezone.lower()) is not None:
                     fromCode = timezone
-            hour = int(timeString.split(":")[0])
-            minute = int(timeString.split(":")[1][0:2])
-            if (len(timeString.split(":")[1])==4 and timeString.split(":")[1][2:4].lower()=="pm"):
-                hour = (hour + 12)%24
-            fromTimeZone = pytz.timezone(fromCode)
-            toTimeZone = pytz.timezone(toCode)
-            today = datetime.datetime.now(tz=fromTimeZone)
-            fromTime = fromTimeZone.localize(datetime.datetime(year=today.year, month=today.month, day=today.day, hour=hour, minute=minute))
-            toTime = fromTime.astimezone(toTimeZone)
-            fromCity = cityToConvertFrom.split("/")[1]
-            content = f"When it is {fromTime.strftime(timeFormat)} in {fromCity} it will be " + toTime.strftime(timeFormat) + " in " + cityToConvertTo
+            if toCode != "DEFAULT" and fromCode != "DEFAUT":                    
+                hour = int(timeString.split(":")[0])
+                minute = int(timeString.split(":")[1][0:2])
+                if (len(timeString.split(":")[1])==4 and timeString.split(":")[1][2:4].lower()=="pm"):
+                    hour = (hour + 12)%24
+                fromTimeZone = pytz.timezone(fromCode)
+                toTimeZone = pytz.timezone(toCode)
+                today = datetime.datetime.now(tz=fromTimeZone)
+                fromTime = fromTimeZone.localize(datetime.datetime(year=today.year, month=today.month, day=today.day, hour=hour, minute=minute))
+                toTime = fromTime.astimezone(toTimeZone)
+                fromCity = cityToConvertFrom.split("/")[1]
+                content = f"When it is {fromTime.strftime(timeFormat)} in {fromCity} it will be " + toTime.strftime(timeFormat) + " in " + cityToConvertTo
             await message.channel.send(content)
             
             
@@ -229,16 +235,18 @@ async def timeHandler(message):
             await sentMessage.edit(content=re.sub("\_\_\_REPLACE\_\_\_STRING\_\_\_",str(uid),sentMessage.content))
 
         else:
-            timeZone = pytz.utc
+            timeZone = "DEFAULT"
             city = "_".join(instruction[1::]).strip()
+            formatedCityName = " ".join(instruction[1::]).strip()
+            content = f"Error, a city with name **{formatedCityName}** could not be found"
             from pytz import all_timezones
             for timezone in all_timezones:
-                if city.lower() in timezone.lower():
+                if re.search(f"[\w\_]*\/{city.lower()}",timezone.lower()) is not None:
                     timeZone = pytz.timezone(timezone)
-            convertedTime = datetime.datetime.now().astimezone(timeZone)
-            content = f"Time in {city} is " + convertedTime.strftime(timeFormat)
+            if timeZone != "DEFAULT":
+                convertedTime = datetime.datetime.now().astimezone(timeZone)
+                content = f"Time in {formatedCityName} is " + convertedTime.strftime(timeFormat)
             await message.channel.send(content)
     await message.delete()
 
-        
     
