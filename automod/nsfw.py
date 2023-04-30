@@ -45,7 +45,6 @@ async def handle_nsfw(message):
                         files.append(discord.File(f"{i}.png"))
                         trigger = trigger and True
                 i=i+1
-                print("test1")
         except Exception as e:
             print(str(e))
             continue
@@ -71,7 +70,6 @@ async def handel_regex_nsfw(message):
     regex = re.compile("https?\:\S+\.(png)|https?\:\S+\.(jpg)|https?\:\S+\.(jpeg)|https?\:\S+\.(gif)")
     arr = re.finditer(regex, message.content)
     for match in arr:
-        print(match)
         try:
             if match.group(0) is not None:
                 img_data = requests.get(str(match.group(0))).content

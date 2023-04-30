@@ -10,6 +10,7 @@ class GuessTheHero(models.Model):
     image_url = models.CharField(max_length=256)
     hero_name = models.CharField(max_length=64, default="")
     guessed = models.BooleanField(default=False)
+    message_id = models.CharField(max_length=18, null=True, default=None)
 
 class Guild(models.Model):
     guild_id = models.CharField(max_length=18, unique=True)

@@ -30,11 +30,8 @@ async def timeHandler(message):
         userInAll = re.findall("\d{18}",message.content)
         user_timezone_1 = None
         user_timezone_2 = None
-        print(userInAll)
         if (userInAll is not None and len(userInAll) > 0):
-            print("A")
             if len(userInAll) > 1:
-                print("B")
 
                 user_timezone_1 = await getDefaultTimezone(userInAll[1])
             user_timezone_2 = await getDefaultTimezone(userInAll[0])
@@ -42,20 +39,15 @@ async def timeHandler(message):
                 content = "No default timezone found for the user you specified\nThis version of the command requires a default timezone you can use this command instead:\n```,time convert <time> <from-city-name> to <to-city-name>```\nOr you can set your default timezone using this command:\n```,time default <city-name>```"
                 return await message.channel.send(content)
             if user_timezone_1 is None:
-                print("C")
 
                 user_timezone_1 = await getDefaultTimezone(message.author.id)
                 if user_timezone_1 is None:
-                    print("D")
                     content = "No default timezone found:\nThis version of the command requires you to set a default timezone if you do not want to set one you can use this command instead:\n```,time convert <time> <from-city-name> to <to-city-name>```\nOr you can set your default timezone using this command:\n```,time default <city-name>```"
                     return await message.channel.send(content)
             else:
-                print("E")
                 temp = user_timezone_1
                 user_timezone_1 = user_timezone_2
                 user_timezone_2 = temp
-            print("F")
-        print("G")
         newContent = " ".join(instruction[2::])
         timeStringRaw = re.search("\d?\d\:\d\d(am)?(pm)?",newContent)
         if (timeStringRaw is None):
