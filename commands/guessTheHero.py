@@ -40,7 +40,7 @@ async def guessTheHeroHandler(message):
         await message.channel.send(url)
     elif len(instruction) == 1 and instruction[0] == ",reveal":
         if message.reference is not None:
-            name = await getHeroNameViaMsgId(message.guild.id, reference)
+            name = await getHeroNameViaMsgId(message.guild.id, message.reference.message_id)
 
         else:
             name = await getHeroName(message.guild.id)

@@ -59,8 +59,6 @@ async def on_message(message):
         await saveChoices(message=message)
     elif message.content.startswith(",test"):
         print("test")
-    elif message.content.startswith(','):
-        await message.channel.send("That is our prefix!")
     
 
 @tree.command(name="hero",description="Register a hero for guess the hero", guild=None)
