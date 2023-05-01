@@ -4,7 +4,7 @@ import discord
 from discord import ui
 from discord import ButtonStyle
 from discord.ui.text_input import TextStyle
-from helpers.gthStore import getHeroGuessCountViaMsgId, addGuessCountViaMsgId, getHeroClueCount, getHeroGuessCount,addGuessCount, addClueCount, setHeroNameViaUserId,setHeroGuessedViaMsgId, getHeroNameViaMsgId, getHeroReady, setHeroImage, setHeroName, getHeroName, setHeroGuessed, getHeroImage,getHeroGuessed
+from helpers.gthStore import getHeroGuessedViaMsgId, getHeroGuessCountViaMsgId, addGuessCountViaMsgId, getHeroClueCount, getHeroGuessCount,addGuessCount, addClueCount, setHeroNameViaUserId,setHeroGuessedViaMsgId, getHeroNameViaMsgId, getHeroReady, setHeroImage, setHeroName, getHeroName, setHeroGuessed, getHeroImage,getHeroGuessed
 from helpers.dota2Heroes import getDota2HeroesList, getHeroAttr, getHeroAttack, getHeroLegs
 from discord import app_commands
 
@@ -41,9 +41,11 @@ async def guessTheHeroHandler(message):
     elif len(instruction) == 1 and instruction[0] == ",reveal":
         if message.reference is not None:
             name = await getHeroNameViaMsgId(message.guild.id, message.reference.message_id)
-
+            await setHeroGuessedViaMsgId(message.guild.id, reference)
         else:
+
             name = await getHeroName(message.guild.id)
+            await setHeroGuessed(message.guild.id)
         await message.channel.send(f"The hero was **{name}**")
     elif len(instruction) == 1 and instruction[0] == ",clue":
         count = await getHeroClueCount(message.guild.id)
@@ -73,7 +75,7 @@ async def guessTheHeroHandler(message):
     elif message.reference is not None:
         reference = message.reference.message_id
         name = await getHeroNameViaMsgId(message.guild.id, reference)
-        if name is not None and name != "":
+        if (name is not None and name != "") and (not await getHeroGuessedViaMsgId(message.guild.id, reference)):
             for match in re.finditer(f"{str(name).lower()}", str(message.content).lower()):
                 if match.group(0) is not None:
                     arr.append(match.group(0))

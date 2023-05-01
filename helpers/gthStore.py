@@ -112,6 +112,14 @@ def getHeroGuessed(guild_id):
         return qs[0].guessed
     else:
         return False
+    
+@sync_to_async
+def getHeroGuessedViaMsgId(guild_id, message_id):
+    qs = GuessTheHero.objects.filter(guild_id=guild_id,message_id=message_id)
+    if (qs.count() > 0):
+        return qs[0].guessed
+    else:
+        return False
 
 @sync_to_async
 def getHeroName(guild_id):
