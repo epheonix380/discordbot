@@ -22,7 +22,7 @@ from commands.nsfw import manual_nsfw
 from commands.time import timeHandler
 from commands.admin import admin
 from commands.ticTacToe import tic
-from commands.guessTheHero import auto_complete, guessTheHeroHandler, saveHeroName
+from commands.guessTheHero import auto_complete, guessTheHeroHandler, saveHeroName, guessHero
 from commands.choices import choices, saveChoices
 from helpers.guildStore import getNSFWChannel, getGuessTheHeroChannel
 
@@ -65,6 +65,11 @@ async def on_message(message):
 @app_commands.autocomplete(hero=auto_complete)
 async def first_commant(interaction: discord.Interaction,hero:str):
     await saveHeroName(interaction=interaction, hero=hero)
+
+@tree.command(name="guess",description="Guess a hero for guess the hero", guild=None)
+@app_commands.autocomplete(hero=auto_complete)
+async def guess(interaction: discord.Interaction,hero:str):
+    await guessHero(interaction=interaction, hero=hero)
 
 @client.event
 async def on_ready():

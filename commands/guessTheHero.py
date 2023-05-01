@@ -26,7 +26,17 @@ async def saveHeroName(interaction : discord.Interaction, hero:str):
     else:
         await interaction.response.send_message(f"**{hero}** was not recognized as a valid dota2 hero", ephemeral=True)
 
-
+async def guessHero(interaction:discord.Interaction, hero:str):
+    guild_id = interaction.guild_id
+    if await getHeroGuessed(guild_id):
+        name = await getHeroName(guild_id)
+        if name == hero:
+            guess = await getHeroGuessCount()
+            await interaction.channel.send(f"The hero was {hero} and <@{interaction.user.id}> guessed it correctly. This was guess in {guess} tries")
+        else:
+            await addGuessCount()
+            message = await interaction.channel.send(f"<@{interaction.user.id}> guessed {hero}")
+            await message.add_reaction("❌")
 
 
 async def guessTheHeroHandler(message):
