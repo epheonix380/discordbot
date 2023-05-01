@@ -38,6 +38,13 @@ async def guessTheHeroHandler(message):
     if len(instruction) == 1 and instruction[0] == ",refresh":
         url = await getHeroImage(message.guild.id)
         await message.channel.send(url)
+    elif len(instruction) == 1 and instruction[0] == ",reveal":
+        if message.reference is not None:
+            name = await getHeroNameViaMsgId(message.guild.id, reference)
+
+        else:
+            name = await getHeroName(message.guild.id)
+        await message.channel.send(f"The hero was **{name}**")
     elif len(instruction) == 1 and instruction[0] == ",clue":
         count = await getHeroClueCount(message.guild.id)
         name = await getHeroName(message.guild.id)
