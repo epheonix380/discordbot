@@ -49,6 +49,63 @@ def setHeroGuessedViaMsgId(guild_id, message_id):
         gth.save()
 
 @sync_to_async
+def addGuessCount(guild_id):
+    qs = GuessTheHero.objects.filter(guild_id=guild_id).order_by("-created_at")
+    gth = qs[0]
+    if (qs.count() > 0):
+        count = gth.guess_count
+        gth.guess_count = count + 1
+        gth.save()
+    else:
+        return False
+    
+@sync_to_async
+def addGuessCountViaMsgId(guild_id, message_id):
+    qs = GuessTheHero.objects.filter(guild_id=guild_id, message_id=message_id).order_by("-created_at")
+    gth = qs[0]
+    if (qs.count() > 0):
+        count = gth.guess_count
+        gth.guess_count = count + 1
+        gth.save()
+    else:
+        return False
+    
+@sync_to_async
+def addClueCount(guild_id):
+    qs = GuessTheHero.objects.filter(guild_id=guild_id).order_by("-created_at")
+    gth = qs[0]
+    if (qs.count() > 0):
+        count = gth.clue_count
+        gth.clue_count = count + 1
+        gth.save()
+    else:
+        return False
+
+@sync_to_async
+def getHeroGuessCount(guild_id):
+    qs = GuessTheHero.objects.filter(guild_id=guild_id).order_by("-created_at")
+    if (qs.count() > 0):
+        return qs[0].guess_count
+    else:
+        return False
+    
+@sync_to_async
+def getHeroGuessCountViaMsgId(guild_id, message_id):
+    qs = GuessTheHero.objects.filter(guild_id=guild_id, message_id=message_id)
+    if (qs.count() > 0):
+        return qs[0].guess_count
+    else:
+        return False
+    
+@sync_to_async
+def getHeroClueCount(guild_id):
+    qs = GuessTheHero.objects.filter(guild_id=guild_id).order_by("-created_at")
+    if (qs.count() > 0):
+        return qs[0].clue_count
+    else:
+        return False
+
+@sync_to_async
 def getHeroGuessed(guild_id):
     qs = GuessTheHero.objects.filter(guild_id=guild_id).order_by("-created_at")
     if (qs.count() > 0):

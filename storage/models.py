@@ -5,16 +5,18 @@ TIMEZONES = tuple(zip(pytz.all_timezones, pytz.all_timezones))
 # Create your models here.
 
 class GuessTheHero(models.Model):
-    guild_id = models.CharField(max_length=18)
+    guild_id = models.CharField(max_length=24)
     created_at = models.DateTimeField(auto_now_add=True)
     image_url = models.CharField(max_length=256)
     hero_name = models.CharField(max_length=64, default="")
     guessed = models.BooleanField(default=False)
-    user_id = models.CharField(max_length=18, null=True, default=None)
-    message_id = models.CharField(max_length=18, null=True, default=None)
+    clue_count = models.IntegerField(default=0)
+    guess_count = models.IntegerField(default=0)
+    user_id = models.CharField(max_length=24, null=True, default=None)
+    message_id = models.CharField(max_length=24, null=True, default=None)
 
 class Guild(models.Model):
-    guild_id = models.CharField(max_length=18, unique=True)
+    guild_id = models.CharField(max_length=24, unique=True)
     guess_the_hero = models.CharField(max_length=24, null=True, blank=True, default=None)
     nsfw_channel = models.CharField(max_length=24, null=True, blank=True, default=None)
 
@@ -22,7 +24,7 @@ class TimeZone(models.Model):
     time_zone = models.CharField(max_length=32, choices=TIMEZONES)
 
 class Member(models.Model):
-    member_id = models.CharField(max_length=18, unique=True)
+    member_id = models.CharField(max_length=24, unique=True)
     time_zone = models.ForeignKey(TimeZone, on_delete=models.CASCADE, default=None, null=True)
     time_format = models.CharField(max_length=64, default="%H:%M on %d-%m-%Y")
 
@@ -44,5 +46,5 @@ class Item(models.Model):
     name = models.CharField(max_length=128)
 
 class BotIgnoreChannels(models.Model):
-    channel_id = models.CharField(max_length=18, unique=True)
+    channel_id = models.CharField(max_length=24, unique=True)
     guild = models.ForeignKey(Guild, on_delete=models.CASCADE)
