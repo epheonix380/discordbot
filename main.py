@@ -59,7 +59,10 @@ async def on_message(message):
         await saveChoices(message=message)
     elif message.content.startswith(",test"):
         print("test")
-    
+
+@tree.command(name="test",description="This is a test command", guild=None)
+async def first_commant(interaction: discord.Interaction):
+    await interaction.response.send_message("Test")
 
 @tree.command(name="hero",description="Register a hero for guess the hero", guild=None)
 @app_commands.autocomplete(hero=auto_complete)
@@ -68,12 +71,14 @@ async def first_commant(interaction: discord.Interaction,hero:str):
 
 @tree.command(name="guess",description="Guess a hero for guess the hero", guild=None)
 @app_commands.autocomplete(hero=auto_complete)
-async def guess(interaction: discord.Interaction,hero:str):
+async def first_commant(interaction: discord.Interaction,hero:str):
     await guessHero(interaction=interaction, hero=hero)
+
 
 @client.event
 async def on_ready():
-    await tree.sync(guild=None)
+    list = await tree.sync(guild=None)
+    print(list)
     print("Ready!")
     
 
