@@ -1,4 +1,5 @@
 import discord
+from discord import app_commands
 from dotenv import load_dotenv
 from django.conf import settings
 import os
@@ -10,16 +11,18 @@ TOKEN = os.getenv("TOKEN")
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
 intents = discord.Intents.default()
 intents.message_content = True
+intents.all()
 if __name__ == '__main__':
     import django
     django.setup()
 client = discord.Client(intents=intents)
+tree = app_commands.CommandTree(client)
 
 from commands.nsfw import manual_nsfw
 from commands.time import timeHandler
 from commands.admin import admin
 from commands.ticTacToe import tic
-from commands.guessTheHero import guessTheHeroHandler
+from commands.guessTheHero import auto_complete, guessTheHeroHandler, saveHeroName
 from commands.choices import choices, saveChoices
 from helpers.guildStore import getNSFWChannel, getGuessTheHeroChannel
 
@@ -55,14 +58,20 @@ async def on_message(message):
     elif message.content.startswith(",choices"):
         await saveChoices(message=message)
     elif message.content.startswith(",test"):
-        await guessTheHeroHandler(message=message)
+        print("test")
     elif message.content.startswith(','):
         await message.channel.send("That is our prefix!")
     
 
+@tree.command(name="hero",description="Register a hero for guess the hero", guild=None)
+@app_commands.autocomplete(hero=auto_complete)
+async def first_commant(interaction: discord.Interaction,hero:str):
+    await saveHeroName(interaction=interaction, hero=hero)
 
-
-    
+@client.event
+async def on_ready():
+    await tree.sync(guild=None)
+    print("Ready!")
     
 
 client.run(TOKEN)

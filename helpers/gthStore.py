@@ -2,8 +2,8 @@ from storage.models import GuessTheHero
 from asgiref.sync import sync_to_async
 
 @sync_to_async
-def setHeroImage(guild_id,image_url,id):
-    gth = GuessTheHero(guild_id=guild_id,image_url=image_url,message_id=id)
+def setHeroImage(guild_id,image_url,id, user_id):
+    gth = GuessTheHero(guild_id=guild_id,image_url=image_url,message_id=id, user_id=user_id)
     gth.save()
     return str(gth.pk)
 
@@ -12,6 +12,17 @@ def setHeroName(pk, hero_name):
     gth = GuessTheHero.objects.get(pk=pk)
     gth.hero_name = hero_name
     gth.save()
+
+@sync_to_async
+def setHeroNameViaUserId(user_id, hero_name):
+    qs = GuessTheHero.objects.filter(user_id=user_id).order_by("-created_at")
+    if (qs.count() > 0):
+        gth = qs[0]
+        gth.hero_name = hero_name
+        gth.save()
+        return True
+    else:
+        return False
 
 @sync_to_async
 def setMsgId(pk, message_id):
