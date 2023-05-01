@@ -28,13 +28,14 @@ async def saveHeroName(interaction : discord.Interaction, hero:str):
 
 async def guessHero(interaction:discord.Interaction, hero:str):
     guild_id = interaction.guild_id
-    if await getHeroGuessed(guild_id):
+    if (not await getHeroGuessed(guild_id)):
         name = await getHeroName(guild_id)
         if name == hero:
-            guess = await getHeroGuessCount()
+            guess = await getHeroGuessCount(guild_id)
+            await setHeroGuessed(guild_id)
             await interaction.channel.send(f"The hero was {hero} and <@{interaction.user.id}> guessed it correctly. This was guess in {guess} tries")
         else:
-            await addGuessCount()
+            await addGuessCount(guild_id)
             message = await interaction.channel.send(f"<@{interaction.user.id}> guessed {hero}")
             await message.add_reaction("❌")
 

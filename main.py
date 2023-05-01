@@ -78,7 +78,6 @@ async def first_commant(interaction: discord.Interaction,hero:str):
 @client.event
 async def on_ready():
     list = await tree.sync(guild=None)
-    print(list)
     print("Ready!")
     
 
