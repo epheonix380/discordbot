@@ -25,6 +25,7 @@ from commands.ticTacToe import tic
 from commands.guessTheHero import auto_complete, guessTheHeroHandler, saveHeroName, guessHero
 from commands.choices import choices, saveChoices
 from helpers.guildStore import getNSFWChannel, getGuessTheHeroChannel
+from helpers.pyaudio import record
 
 @client.event
 async def on_ready():
@@ -58,7 +59,7 @@ async def on_message(message):
     elif message.content.startswith(",choices"):
         await saveChoices(message=message)
     elif message.content.startswith(",test"):
-        print("test")
+        record()
 
 @tree.command(name="test",description="This is a test command", guild=None)
 async def first_commant(interaction: discord.Interaction):
