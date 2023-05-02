@@ -11,6 +11,7 @@ TOKEN = os.getenv("TOKEN")
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
 intents = discord.Intents.default()
 intents.message_content = True
+intents.voice_states = True
 intents.all()
 if __name__ == '__main__':
     import django
@@ -59,7 +60,8 @@ async def on_message(message):
     elif message.content.startswith(",choices"):
         await saveChoices(message=message)
     elif message.content.startswith(",test"):
-        record()
+        vc = await message.author.voice.channel.connect(timeout=60)
+        record(vc)
 
 @tree.command(name="test",description="This is a test command", guild=None)
 async def first_commant(interaction: discord.Interaction):
