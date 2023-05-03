@@ -8,3 +8,4 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
+librespot = "0.4.2"
