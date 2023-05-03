@@ -19,6 +19,9 @@ markdown = "*"
 django-filter = "*"
 librespot = {git = "https://github.com/kokarare1212/librespot-python"}
 requests = "*"
+pyaudio = "*"
+ffmpeg = "*"
+ffmpeg-python = "*"
 
 [dev-packages]
 
