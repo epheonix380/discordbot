@@ -33,7 +33,7 @@ async def on_ready():
     print(f'We have logged in as {client.user}')
 
 @client.event
-async def on_message(message):
+async def on_message(message: discord.Message):
     arr = []
     for match in re.finditer("https?\:\S+\.(png)|https?\:\S+\.(jpg)|https?\:\S+\.(jpeg)|https?\:\S+\.(gif)", message.content):
         if match.group(0) is not None:
@@ -60,7 +60,7 @@ async def on_message(message):
     elif message.content.startswith(",choices"):
         await saveChoices(message=message)
     elif message.content.startswith(",test"):
-        vc = await message.author.voice.channel.connect(timeout=60)
+        vc = await message.author.voice.channel.connect(timeout=5)
         record(vc)
 
 @tree.command(name="test",description="This is a test command", guild=None)
