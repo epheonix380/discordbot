@@ -1,4 +1,5 @@
 import discord
+import threading
 from discord import app_commands
 from dotenv import load_dotenv
 from django.conf import settings
@@ -60,7 +61,7 @@ async def on_message(message: discord.Message):
         await saveChoices(message=message)
     elif message.content.startswith(",test"):
         vc = await message.author.voice.channel.connect()
-        play(vc=vc, message=message)
+        thread = threading.Thread(target=play, args=(vc, message)).start()
 
 @tree.command(name="test",description="This is a test command", guild=None)
 async def first_commant(interaction: discord.Interaction):

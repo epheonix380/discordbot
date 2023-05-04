@@ -1,2 +1,3 @@
 libasound2-dev
 build-essential
+ffmpeg
