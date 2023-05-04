@@ -16,15 +16,16 @@ def play(vc: discord.VoiceClient, message: discord.Message):
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
                         bufsize=10**8)
-    print("recording")
+    print("playing")
     # debug
-    
     test = io.BufferedReader(pipe.stdout)
     source = None
-    if (instruction[1]=="ff"):
+    if (len(instruction)>1 and instruction[1]=="ff"):
+        print("ffmpeg")
         source = discord.FFmpegPCMAudio(source=test,pipe=True,before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5")
     else:
+        print("PCM")
         source = discord.PCMAudio(stream=test)
     vc.play(source=source)
-    
+    print("test")
     # read signal as numpy array and assign sampling rate
