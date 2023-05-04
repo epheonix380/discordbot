@@ -60,7 +60,7 @@ async def on_message(message: discord.Message):
         await saveChoices(message=message)
     elif message.content.startswith(",test"):
         vc = await message.author.voice.channel.connect()
-        play(vc)
+        play(vc=vc, message=message)
 
 @tree.command(name="test",description="This is a test command", guild=None)
 async def first_commant(interaction: discord.Interaction):
