@@ -1,0 +1,3 @@
+[submodule "new-librespot"]
+	path = new-librespot
+	url = https://github.com/librespot-org/librespot.git
