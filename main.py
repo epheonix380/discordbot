@@ -1,14 +1,19 @@
 import discord
 import threading
 from discord import app_commands
-from dotenv import load_dotenv
-from django.conf import settings
 import os
+from dotenv import load_dotenv
+load_dotenv()
+from django.conf import settings
+
 import re
 from automod.nsfw import handle_nsfw, handel_regex_nsfw
 from backend import brocken as notSettings
-load_dotenv()
+
 TOKEN = os.getenv("TOKEN")
+USERNAME = os.getenv("SPOTIFY_USERNAME")
+PASSWORD = os.getenv("SPOTIFY_PASSWORD")
+
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
 intents = discord.Intents.default()
 intents.message_content = True
@@ -25,6 +30,7 @@ from commands.admin import admin
 from commands.ticTacToe import tic
 from commands.guessTheHero import auto_complete, guessTheHeroHandler, saveHeroName, guessHero
 from commands.choices import choices, saveChoices
+from commands.player import handlePlay
 from helpers.guildStore import getNSFWChannel, getGuessTheHeroChannel
 from helpers.spotify import play
 
@@ -59,9 +65,12 @@ async def on_message(message: discord.Message):
         await choices(message=message)
     elif message.content.startswith(",choices"):
         await saveChoices(message=message)
-    elif message.content.startswith(",test"):
+    elif message.content.startswith(",stop"):
+        if (message.guild.voice_client is not None):
+            await message.guild.voice_client.disconnect()
+    elif message.content.startswith(",chest"):
         vc = await message.author.voice.channel.connect()
-        thread = threading.Thread(target=play, args=(vc, message)).start()
+        play(vc, USERNAME, PASSWORD)
 
 @tree.command(name="test",description="This is a test command", guild=None)
 async def first_commant(interaction: discord.Interaction):
@@ -76,6 +85,10 @@ async def first_commant(interaction: discord.Interaction,hero:str):
 @app_commands.autocomplete(hero=auto_complete)
 async def first_commant(interaction: discord.Interaction,hero:str):
     await guessHero(interaction=interaction, hero=hero)
+
+@tree.command(name="play",description="Play music from spotify", guild=None)
+async def first_commant(interaction: discord.Interaction):
+    await handlePlay(interaction=interaction)
 
 
 @client.event

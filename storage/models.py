@@ -27,6 +27,9 @@ class Member(models.Model):
     member_id = models.CharField(max_length=24, unique=True)
     time_zone = models.ForeignKey(TimeZone, on_delete=models.CASCADE, default=None, null=True)
     time_format = models.CharField(max_length=64, default="%H:%M on %d-%m-%Y")
+    spotify_username = models.CharField(max_length=128, default="")
+    spotify_authtoken = models.CharField(max_length=128, default="")
+
 
 class GuildMemberMap(models.Model):
     guild = models.ForeignKey(Guild, on_delete=models.CASCADE)

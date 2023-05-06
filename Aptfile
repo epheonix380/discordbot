@@ -1,3 +1,4 @@
 libasound2-dev
 build-essential
 ffmpeg
+libffi-devel
