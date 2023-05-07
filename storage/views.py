@@ -25,15 +25,14 @@ def index(req):
             "code": code,
             "redirect_uri": "http://127.0.0.1:8000/utils/callback"
         }
-        #response = requests.post("https://accounts.spotify.com/api/token", data=token_data, headers=token_headers)
-        #token = response.json()["access_token"]
-        #user = requests.get("https://api.spotify.com/v1/me", headers={"Authorization": "Bearer " + token,})
-        #username = user.json()["id"]
-        password = code
+        response = requests.post("https://accounts.spotify.com/api/token", data=token_data, headers=token_headers)
+        token = response.json()["access_token"]
+        user = requests.get("https://api.spotify.com/v1/me", headers={"Authorization": "Bearer " + token,})
+        username = user.json()["id"]
         print(code)
         print("\n Spcer \n")
         member, created = Member.objects.update_or_create(member_id=uid,defaults={
-           "spotify_authtoken":password})
+           "spotify_username":username,"spotify_authtoken":token})
         return HttpResponse("You have succesfully logged in")
     except:
         return HttpResponse('Error Try again')

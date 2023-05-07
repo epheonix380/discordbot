@@ -12,7 +12,7 @@ URL = os.getenv("CLIENT_URL")
 
 async def handlePlay(interaction:discord.Interaction):
     credentials = await getSpotifyUsernameAndToken(interaction.user.id)
-    if (credentials["username"] != "" and credentials["token"] != ""):
+    if (len(credentials["username"])>5 and len(credentials["token"])>5):
         if (interaction.user.voice is not None):
             vc = await interaction.user.voice.channel.connect()
             play(vc=vc, USERNAME=credentials["username"], PASSWORD=credentials["token"])
