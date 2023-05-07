@@ -8,7 +8,7 @@ load_dotenv()
  # init command
 def play(vc: discord.VoiceClient, USERNAME:str, PASSWORD:str):
 
-    ffmpegCommand = f'librespot -b 320 -n Waifu --username {USERNAME} --disable-discovery --cache ./cache --system-cache ./systemCache -B pipe --passthrough | ffmpeg -i pipe: -ac 2 -ar 48000 -f s16le pipe:1'
+    ffmpegCommand = f'target/release/librespot -b 320 -n Waifu --username {USERNAME} --password {PASSWORD} --disable-discovery --cache ./cache --system-cache ./systemCache -B pipe --passthrough | ffmpeg -re -i pipe: -ac 2 -ar 48000 -f s16le pipe:1'
     ffmpegPipe = subprocess.Popen(ffmpegCommand,
                                   shell=True,
                                   stdout=subprocess.PIPE,

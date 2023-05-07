@@ -225,7 +225,6 @@ fn get_setup() -> Setup {
     const NORMALISATION_RELEASE: &str = "normalisation-release";
     const NORMALISATION_THRESHOLD: &str = "normalisation-threshold";
     const ONEVENT: &str = "onevent";
-    #[cfg(feature = "passthrough-decoder")]
     const PASSTHROUGH: &str = "passthrough";
     const PASSWORD: &str = "password";
     const PROXY: &str = "proxy";
@@ -264,7 +263,6 @@ fn get_setup() -> Setup {
     const NAME_SHORT: &str = "n";
     const DISABLE_DISCOVERY_SHORT: &str = "O";
     const ONEVENT_SHORT: &str = "o";
-    #[cfg(feature = "passthrough-decoder")]
     const PASSTHROUGH_SHORT: &str = "P";
     const PASSWORD_SHORT: &str = "p";
     const EMIT_SINK_EVENTS_SHORT: &str = "Q";
@@ -576,10 +574,7 @@ fn get_setup() -> Setup {
         ZEROCONF_INTERFACE,
         "Comma-separated interface IP addresses on which zeroconf will bind. Defaults to all interfaces. Ignored by DNS-SD.",
         "IP"
-    );
-
-    #[cfg(feature = "passthrough-decoder")]
-    opts.optflag(
+    ).optflag(
         PASSTHROUGH_SHORT,
         PASSTHROUGH,
         "Pass a raw stream to the output. Only works with the pipe and subprocess backends.",
@@ -1599,10 +1594,8 @@ fn get_setup() -> Setup {
             },
         };
 
-        #[cfg(feature = "passthrough-decoder")]
         let passthrough = opt_present(PASSTHROUGH);
-        #[cfg(not(feature = "passthrough-decoder"))]
-        let passthrough = false;
+
 
         PlayerConfig {
             bitrate,

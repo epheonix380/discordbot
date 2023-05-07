@@ -68,7 +68,7 @@ async def on_message(message: discord.Message):
     elif message.content.startswith(",stop"):
         if (message.guild.voice_client is not None):
             await message.guild.voice_client.disconnect()
-    elif message.content.startswith(",chest"):
+    elif message.content.startswith(",play"):
         vc = await message.author.voice.channel.connect()
         play(vc, USERNAME, PASSWORD)
 

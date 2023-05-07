@@ -148,7 +148,10 @@ impl Session {
             )
             .await
             {
-                Ok(creds) => break (creds, transport),
+                Ok(creds) => {
+                    info!("Auth token:{:x?}",creds.auth_data);
+                    break (creds, transport);
+                },
                 Err(e) => {
                     if let Some(AuthenticationError::LoginFailed(ErrorCode::TryAnotherAP)) =
                         e.error.downcast_ref::<AuthenticationError>()
