@@ -1,0 +1,8 @@
+/audio
+/connect
+/core
+/discovery
+/protocol
+db.sqlite3
+/target/debug
+/target/temp

@@ -16,11 +16,8 @@ psycopg2 = "*"
 djangorestframework = "*"
 markdown = "*"
 django-filter = "*"
-librespot = {git = "https://github.com/kokarare1212/librespot-python"}
 requests = "*"
-pynacl = "*"
 "discord.py" = {extras = ["voice"], version = "*"}
-spotipy = "*"
 
 [dev-packages]
 
