@@ -21,6 +21,7 @@ async def saveHeroName(interaction : discord.Interaction, hero:str):
         success = await setHeroNameViaUserId(user_id, hero)
         if success:
             await interaction.response.send_message(f"Hero is **{hero}**", ephemeral=True)
+            await interaction.channel.send("Ready! Guess the hero using /guess or just type the hero name in chat!")
         else:
             await interaction.response.send_message(f"An error occured", ephemeral=True)
     else:

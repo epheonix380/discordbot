@@ -1,2 +1,6 @@
 .env
 *.png
+/cache
+/temp
+/systemCache
+/target
