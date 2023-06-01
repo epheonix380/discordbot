@@ -30,7 +30,7 @@ def getGuildActivity(guild_id, message:discord.Message):
     worksheet = workbook.add_worksheet()
     row = 0
     worksheet.write_string(row, 0, "Date")
-    worksheet.write_string(row, 1, "Activity")
+    worksheet.write_string(row, 1, "Messages Sent")
     for day in serializer:
         row+=1
         worksheet.write_string(row,0,str(day["date"]))
