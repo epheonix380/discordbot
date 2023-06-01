@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import MemberTimeZoneMap, TimeZone, Item
+from .models import MemberTimeZoneMap, TimeZone, Item, GuildActivity
 
 class ItemSerializer(serializers.ModelSerializer):
     class Meta:
@@ -18,3 +18,9 @@ class TimeMapSerializer(serializers.ModelSerializer):
         fields = ['time_zone']
     def get_time_zone(self, obj):
         return str(obj.time_zone.time_zone)
+    
+class GuildActivitySerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = GuildActivity
+        fields = ['date', 'activity']

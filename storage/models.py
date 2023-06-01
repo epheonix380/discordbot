@@ -20,6 +20,11 @@ class Guild(models.Model):
     guess_the_hero = models.CharField(max_length=24, null=True, blank=True, default=None)
     nsfw_channel = models.CharField(max_length=24, null=True, blank=True, default=None)
 
+class GuildActivity(models.Model):
+    guild = models.ForeignKey(Guild, on_delete=models.CASCADE)
+    date = models.DateField(auto_now=True)
+    activity = models.IntegerField(default=0)
+
 class TimeZone(models.Model):
     time_zone = models.CharField(max_length=32, choices=TIMEZONES)
 

@@ -25,13 +25,14 @@ from commands.ticTacToe import tic
 from commands.guessTheHero import auto_complete, guessTheHeroHandler, saveHeroName, guessHero
 from commands.choices import choices, saveChoices
 from helpers.guildStore import getNSFWChannel, getGuessTheHeroChannel
+from helpers.statsStore import addGuildActivity, getGuildActivity
 
 @client.event
 async def on_ready():
     print(f'We have logged in as {client.user}')
 
 @client.event
-async def on_message(message):
+async def on_message(message: discord.Message):
     arr = []
     for match in re.finditer("https?\:\S+\.(png)|https?\:\S+\.(jpg)|https?\:\S+\.(jpeg)|https?\:\S+\.(gif)", message.content):
         if match.group(0) is not None:
@@ -57,8 +58,13 @@ async def on_message(message):
         await choices(message=message)
     elif message.content.startswith(",choices"):
         await saveChoices(message=message)
+    elif message.content.startswith(",activity"):
+        file = await getGuildActivity(message.guild.id, message)
+        discordFile = discord.File(fp=file, filename=file)
+        await message.channel.send("Here is the activity for this guild", file=discordFile)
     elif message.content.startswith(",test"):
         print("test")
+    await addGuildActivity(message.guild.id)
 
 @tree.command(name="test",description="This is a test command", guild=None)
 async def first_commant(interaction: discord.Interaction):
