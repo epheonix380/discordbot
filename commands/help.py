@@ -24,6 +24,11 @@ async def helpHandler(message:discord.Message):
             ```,admin nsfw [CHANNEL]``` to set the nsfw channel of the server
             ```,admin guessTheHero [Channel]``` to set the guess the hero channel of the server
             """)
+        elif (instructions[1] == "activity"):
+            await message.channel.send("""
+            ```,activity``` get the activity on this server
+            ```,admin @user``` get the activity of user on this server
+            """)
     else:
         await message.channel.send("""
         Welcome to Big Tiddy goth GF
@@ -36,5 +41,7 @@ async def helpHandler(message:discord.Message):
         ,choose\n
         ADMIN: Admin commands that help with Guess The Hero and NSFW Channels do ,help admin for more details
         ,admin\n
+        SERVER STATS: These command shows server stats for individuals and the server as a whole. Use ,help activity for more info
+        ,activity\n
         """)
     await message.delete()
