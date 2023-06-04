@@ -8,7 +8,7 @@ async def handleActivity(message:discord.Message):
         firstInstruction = re.search("\d{18}",instructions[1])
         if (firstInstruction is not None and firstInstruction.group(0) != ""):
             member_id = firstInstruction.group(0)
-            file = await getIndividualGuildID(message.guild.id,message.author.id, message)
+            file = await getIndividualGuildID(message.guild.id,member_id, message)
             discordFile = discord.File(fp=file, filename=file)
             await message.channel.send("Here is the activity for this member", file=discordFile)
 
