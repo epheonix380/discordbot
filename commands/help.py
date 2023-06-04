@@ -32,7 +32,7 @@ async def helpHandler(message:discord.Message):
     else:
         await message.channel.send("""
         Welcome to Big Tiddy goth GF
-        Here are our commands\n
+        Here are our commands do ,help [command] for more specific command help\n
         NSFW: Hides any nsfw image/text/video/gif:
         ,nsfw\n
         TIME: Time related command do ,help time for more info
