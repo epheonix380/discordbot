@@ -17,7 +17,7 @@ djangorestframework = "*"
 markdown = "*"
 django-filter = "*"
 requests = "*"
-"discord.py" = {extras = ["voice"], version = "*"}
+"discord.py" = {"extras" = ["voice"], "version" = "*"}
 xlsxwriter = "*"
 
 [dev-packages]
