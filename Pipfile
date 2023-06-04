@@ -18,6 +18,7 @@ markdown = "*"
 django-filter = "*"
 requests = "*"
 "discord.py" = {extras = ["voice"], version = "*"}
+xlsxwriter = "*"
 
 [dev-packages]
 

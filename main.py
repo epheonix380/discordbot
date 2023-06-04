@@ -33,6 +33,9 @@ from commands.choices import choices, saveChoices
 from commands.player import handlePlay
 from helpers.guildStore import getNSFWChannel, getGuessTheHeroChannel
 from helpers.spotify import play
+from helpers.statsStore import addGuildActivity, getGuildActivity
+from commands.activity import handleActivity
+from commands.help import helpHandler
 
 @client.event
 async def on_ready():
@@ -46,20 +49,23 @@ async def on_message(message: discord.Message):
             arr.append(match.group(0))
     if str(message.author.id) == "845668514341191750":
         return
-    if (message.guild):
-        nsfwChannel = await getNSFWChannel(message.guild.id)
-        if (nsfwChannel is None or str(nsfwChannel)[2:-1:1] != str(message.channel.id)):
-            if message.attachments: #or len(message.embeds)>0:
-                await handle_nsfw(message)
-            elif len(arr) != 0:
-                await handel_regex_nsfw(message)
-        guessTheHeroChannel = await getGuessTheHeroChannel(message.guild.id)
-        if (guessTheHeroChannel is not None and str(guessTheHeroChannel)[2:-1:1] == str(message.channel.id)):
-            await guessTheHeroHandler(message=message)
+    nsfwChannel = await getNSFWChannel(message.guild.id)
+    is_nsfw = 0
+    if (nsfwChannel is None or str(nsfwChannel)[2:-1:1] != str(message.channel.id)):
+        if message.attachments: #or len(message.embeds)>0:
+            is_nsfw = await handle_nsfw(message)
+        elif len(arr) != 0:
+            is_nsfw = await handel_regex_nsfw(message)
+    guessTheHeroChannel = await getGuessTheHeroChannel(message.guild.id)
+    if (guessTheHeroChannel is not None and str(guessTheHeroChannel)[2:-1:1] == str(message.channel.id)):
+        await guessTheHeroHandler(message=message)
     if message.content.startswith(",nsfw"):
+        is_nsfw = 1
         await manual_nsfw(message=message)
     elif message.content.startswith(",time"):
         await timeHandler(message=message)
+    elif message.content.startswith(",help"):
+        await helpHandler(message=message)
     elif message.content.startswith(",admin"):
         await admin(message=message)
     elif message.content.startswith(",choose"):
@@ -72,6 +78,11 @@ async def on_message(message: discord.Message):
     elif message.content.startswith(",play"):
         vc = await message.author.voice.channel.connect()
         play(vc, USERNAME, PASSWORD)
+    elif message.content.startswith(",activity"):
+        await handleActivity(message)
+    elif message.content.startswith(",test"):
+        print("test")
+    await addGuildActivity(message.guild.id, message, is_nsfw)
 
 @tree.command(name="test",description="This is a test command", guild=None)
 async def first_commant(interaction: discord.Interaction):

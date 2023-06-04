@@ -6,6 +6,7 @@ classifier = NudeClassifier()
 
 async def handle_nsfw(message):
     trigger = True
+    nsfw_count = 0
     containsEmbeds = False
     regex = re.compile("https?\:\S+\.(png)|https?\:\S+\.(jpg)|https?\:\S+\.(jpeg)|https?\:\S+\.(gif)")
     i = 0
@@ -17,7 +18,7 @@ async def handle_nsfw(message):
                 handler.write(img_data)
                 obj = classifier.classify(f"SPOILER_{i}.png")
                 if obj[f"SPOILER_{i}.png"]['safe']< 0.4 or (message.author.id == "226315767564599297" and obj[f"SPOILER_{i}.png"]['safe']< 0.75):
-                    
+                    nsfw_count = nsfw_count + 1
                     trigger = trigger and False
                     files.append(discord.File(f"SPOILER_{i}.png"))
                 else:
@@ -35,7 +36,7 @@ async def handle_nsfw(message):
                 handler.write(img_data)
                 obj = classifier.classify(f"SPOILER_{i}.png")
                 if obj[f"SPOILER_{i}.png"]['safe']< 0.4 or (message.author.id == "226315767564599297" and obj[f"SPOILER_{i}.png"]['safe']< 0.75):
-                    
+                    nsfw_count = nsfw_count + 1
                     containsEmbeds = True
                     trigger = trigger and False
                     files.append(discord.File(f"SPOILER_{i}.png"))
@@ -50,7 +51,7 @@ async def handle_nsfw(message):
             continue
         
     if trigger:
-        return
+        return nsfw_count
     else:
         sentMessage = ""
         if containsEmbeds:
@@ -61,10 +62,12 @@ async def handle_nsfw(message):
         sentBy = f"Sent by: <@{message.author.id}>\n"
         await sentMessage.edit(content=sentBy+sentMessage.content)
         await message.delete()
+        return nsfw_count
 
 async def handel_regex_nsfw(message):
     trigger = True
     containsEmbeds = False
+    nsfw_count = 0
     i = 0
     files = []
     regex = re.compile("https?\:\S+\.(png)|https?\:\S+\.(jpg)|https?\:\S+\.(jpeg)|https?\:\S+\.(gif)")
@@ -77,7 +80,7 @@ async def handel_regex_nsfw(message):
                     handler.write(img_data)
                     obj = classifier.classify(f"SPOILER_{i}.png")
                     if obj[f"SPOILER_{i}.png"]['safe']< 0.4 or (message.author.id == "226315767564599297" and obj[f"SPOILER_{i}.png"]['safe']< 0.75):
-                        
+                        nsfw_count = nsfw_count + 1
                         containsEmbeds = True
                         trigger = trigger and False
                         files.append(discord.File(f"SPOILER_{i}.png"))
@@ -91,7 +94,7 @@ async def handel_regex_nsfw(message):
             print(str(e))
             continue
     if trigger:
-        return
+        return nsfw_count
     else:
         sentMessage = ""
         if containsEmbeds:
@@ -102,4 +105,5 @@ async def handel_regex_nsfw(message):
         sentBy = f"Sent by: <@{message.author.id}>\n"
         await sentMessage.edit(content=sentBy+sentMessage.content)
         await message.delete()
+        return nsfw_count
         
