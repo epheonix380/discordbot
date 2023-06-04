@@ -37,7 +37,7 @@ async def helpHandler(message:discord.Message):
         ,nsfw\n
         TIME: Time related command do ,help time for more info
         ,time\n
-        CHOOSE: Let the bot randomoly decide between a few options
+        CHOOSE: Let the bot randomoly decide between a few options, seperate options with commas
         ,choose\n
         ADMIN: Admin commands that help with Guess The Hero and NSFW Channels do ,help admin for more details
         ,admin\n

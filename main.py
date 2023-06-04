@@ -60,7 +60,7 @@ async def on_message(message: discord.Message):
     if (guessTheHeroChannel is not None and str(guessTheHeroChannel)[2:-1:1] == str(message.channel.id)):
         await guessTheHeroHandler(message=message)
     if message.content.startswith(",nsfw"):
-        is_nsfw = 1
+        is_nsfw = 0
         await manual_nsfw(message=message)
     elif message.content.startswith(",time"):
         await timeHandler(message=message)
