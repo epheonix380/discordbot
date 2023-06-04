@@ -64,7 +64,7 @@ async def on_message(message: discord.Message):
         await message.channel.send("Here is the activity for this guild", file=discordFile)
     elif message.content.startswith(",test"):
         print("test")
-    await addGuildActivity(message.guild.id)
+    await addGuildActivity(message.guild.id, message)
 
 @tree.command(name="test",description="This is a test command", guild=None)
 async def first_commant(interaction: discord.Interaction):

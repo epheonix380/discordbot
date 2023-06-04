@@ -23,4 +23,4 @@ class GuildActivitySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = GuildActivity
-        fields = ['date', 'activity']
+        fields = ['date', 'activity', "word_count"]

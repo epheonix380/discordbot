@@ -24,6 +24,7 @@ class GuildActivity(models.Model):
     guild = models.ForeignKey(Guild, on_delete=models.CASCADE)
     date = models.DateField(auto_now=True)
     activity = models.IntegerField(default=0)
+    word_count = models.IntegerField(default=0)
 
 class TimeZone(models.Model):
     time_zone = models.CharField(max_length=32, choices=TIMEZONES)
