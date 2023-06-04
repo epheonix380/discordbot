@@ -25,9 +25,9 @@ def addGuildActivity(guild_id, message:discord.Message, is_nsfw):
             gma.word_count = gma.word_count + word_count
             ga.image_count = ga.image_count + len(message.attachments)
             gma.image_count = gma.image_count + len(message.attachments)
-            if (is_nsfw):
-                ga.nsfw_count = ga.nsfw_count + 1
-                gma.nsfw_count = gma.nsfw_count + 1
+            if (is_nsfw > 0):
+                ga.nsfw_count = ga.nsfw_count + is_nsfw
+                gma.nsfw_count = gma.nsfw_count + is_nsfw
             ga.save()
             gma.save()
         

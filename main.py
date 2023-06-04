@@ -40,7 +40,7 @@ async def on_message(message: discord.Message):
     if str(message.author.id) == "845668514341191750":
         return
     nsfwChannel = await getNSFWChannel(message.guild.id)
-    is_nsfw = False
+    is_nsfw = 0
     if (nsfwChannel is None or str(nsfwChannel)[2:-1:1] != str(message.channel.id)):
         if message.attachments: #or len(message.embeds)>0:
             is_nsfw = await handle_nsfw(message)
@@ -50,6 +50,7 @@ async def on_message(message: discord.Message):
     if (guessTheHeroChannel is not None and str(guessTheHeroChannel)[2:-1:1] == str(message.channel.id)):
         await guessTheHeroHandler(message=message)
     if message.content.startswith(",nsfw"):
+        is_nsfw = 1
         await manual_nsfw(message=message)
     elif message.content.startswith(",time"):
         await timeHandler(message=message)
