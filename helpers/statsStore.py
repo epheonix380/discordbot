@@ -1,5 +1,5 @@
 from storage.models import Guild, GuildActivity, MemberGuildActivity, Member
-from storage.serializers import GuildActivitySerializer
+from storage.serializers import GuildActivitySerializer, MemberGuildActivitySerializer
 from asgiref.sync import sync_to_async
 import datetime
 from django.db import transaction
@@ -16,7 +16,7 @@ def addGuildActivity(guild_id, message:discord.Message, is_nsfw):
         word_count = len(message.content.split())
         [ga, isCreated] = GuildActivity.objects.get_or_create(guild=guild, date=date)
         [member, temp] = Member.objects.get_or_create(member_id=message.author.id)
-        [gma, isGMACreated] = MemberGuildActivity.objects.get_or_create(guild=guild, member=member)
+        [gma, isGMACreated] = MemberGuildActivity.objects.get_or_create(guild=guild, member=member, date=date)
         with transaction.atomic():
             activity = ga.activity
             ga.activity = activity + 1
@@ -57,6 +57,28 @@ def getGuildActivity(guild_id, message:discord.Message):
         worksheet.write_string(row,4,str(day["nsfw_count"]))
     workbook.close()
     return "GuildActivity.xlsx"
+
+@sync_to_async
+def getIndividualGuildID(guild_id, member_id,message:discord.Message):
+    qs = MemberGuildActivity.objects.filter(guild__guild_id=guild_id, member__member_id=member_id)
+    serializer = MemberGuildActivitySerializer(qs, many=True).data
+    workbook = xlsxwriter.Workbook('MemberActivity.xlsx')
+    worksheet = workbook.add_worksheet()
+    row = 0
+    worksheet.write_string(row, 0, "Date")
+    worksheet.write_string(row, 1, "Messages Sent")
+    worksheet.write_string(row, 2, "Words used")
+    worksheet.write_string(row, 3, "Images Posted")
+    worksheet.write_string(row, 4, "NSFW Images")
+    for day in serializer:
+        row+=1
+        worksheet.write_string(row,0,str(day["date"]))
+        worksheet.write_string(row,1,str(day["activity"]))
+        worksheet.write_string(row,2,str(day["word_count"]))
+        worksheet.write_string(row,3,str(day["image_count"]))
+        worksheet.write_string(row,4,str(day["nsfw_count"]))
+    workbook.close()
+    return "MemberActivity.xlsx"
     
 
 

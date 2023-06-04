@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import MemberTimeZoneMap, TimeZone, Item, GuildActivity
+from .models import MemberTimeZoneMap, TimeZone, Item, GuildActivity, MemberGuildActivity
 
 class ItemSerializer(serializers.ModelSerializer):
     class Meta:
@@ -23,4 +23,10 @@ class GuildActivitySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = GuildActivity
+        fields = '__all__'
+
+class MemberGuildActivitySerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = MemberGuildActivity
         fields = '__all__'

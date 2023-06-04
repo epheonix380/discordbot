@@ -26,6 +26,7 @@ from commands.guessTheHero import auto_complete, guessTheHeroHandler, saveHeroNa
 from commands.choices import choices, saveChoices
 from helpers.guildStore import getNSFWChannel, getGuessTheHeroChannel
 from helpers.statsStore import addGuildActivity, getGuildActivity
+from commands.activity import handleActivity
 
 @client.event
 async def on_ready():
@@ -61,9 +62,7 @@ async def on_message(message: discord.Message):
     elif message.content.startswith(",choices"):
         await saveChoices(message=message)
     elif message.content.startswith(",activity"):
-        file = await getGuildActivity(message.guild.id, message)
-        discordFile = discord.File(fp=file, filename=file)
-        await message.channel.send("Here is the activity for this guild", file=discordFile)
+        await handleActivity(message)
     elif message.content.startswith(",test"):
         print("test")
     await addGuildActivity(message.guild.id, message, is_nsfw)

@@ -40,6 +40,7 @@ class Member(models.Model):
 class MemberGuildActivity(models.Model):
     guild = models.ForeignKey(Guild, on_delete=models.CASCADE)
     member = models.ForeignKey(Member, on_delete=models.CASCADE)
+    date = models.DateField(auto_now=True)
     activity = models.IntegerField(default=0)
     word_count = models.IntegerField(default=0)
     image_count = models.IntegerField(default=0)
