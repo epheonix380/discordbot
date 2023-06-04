@@ -48,6 +48,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles'
 ]
 
+STATIC_ROOT = f"{BASE_DIR}/static"
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
