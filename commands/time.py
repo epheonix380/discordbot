@@ -34,7 +34,9 @@ async def timeHandler(message):
             if len(userInAll) > 1:
 
                 user_timezone_1 = await getDefaultTimezone(userInAll[1])
+                print(user_timezone_1)
             user_timezone_2 = await getDefaultTimezone(userInAll[0])
+            print(user_timezone_2)
             if user_timezone_2 is None:
                 content = "No default timezone found for the user you specified\nThis version of the command requires a default timezone you can use this command instead:\n```,time convert <time> <from-city-name> to <to-city-name>```\nOr you can set your default timezone using this command:\n```,time default <city-name>```"
                 return await message.channel.send(content)
@@ -54,16 +56,10 @@ async def timeHandler(message):
             content = "Time not found please specify a time using : between the hours and mintues like 13:00 or 01:00pm"
             return await message.channel.send(content)
         if user_timezone_1 is not None and user_timezone_2 is not None:
-            toCode = None
-            fromCode = None
+            toCode = user_timezone_2
+            fromCode = user_timezone_1
             timeString =  timeStringRaw.group(0)
             content = "An error has occured, we retrieved timezone values from your accounts that are impossible."
-            from pytz import all_timezones
-            for timezone in all_timezones:
-                if re.search(f"[\w\_]*\/{user_timezone_2.lower()}",timezone.lower()) is not None:
-                    toCode = timezone
-                if re.search(f"[\w\_]*\/{user_timezone_1.lower()}",timezone.lower()) is not None:
-                    fromCode = timezone
             if toCode is not None and fromCode is not None:
                 hour = int(timeString.split(":")[0])
                 minute = int(timeString.split(":")[1][0:2])

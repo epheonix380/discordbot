@@ -27,6 +27,7 @@ from commands.choices import choices, saveChoices
 from helpers.guildStore import getNSFWChannel, getGuessTheHeroChannel
 from helpers.statsStore import addGuildActivity, getGuildActivity
 from commands.activity import handleActivity
+from commands.help import helpHandler
 
 @client.event
 async def on_ready():
@@ -55,6 +56,8 @@ async def on_message(message: discord.Message):
         await manual_nsfw(message=message)
     elif message.content.startswith(",time"):
         await timeHandler(message=message)
+    elif message.content.startswith(",help"):
+        await helpHandler(message=message)
     elif message.content.startswith(",admin"):
         await admin(message=message)
     elif message.content.startswith(",choose"):
