@@ -4,7 +4,7 @@ from asgiref.sync import sync_to_async
 @sync_to_async
 def getNSFWChannel(uid):
     qs = Guild.objects.filter(guild_id=uid) 
-    if (qs.count() > 0 or qs[0].nsfw_channel is None):
+    if (qs.count() > 0 and qs[0].nsfw_channel is not None):
         return f"<#{str(qs[0].nsfw_channel)}>"
     else:
         return None
@@ -19,7 +19,7 @@ def setNSFWChannel(uid, channelID):
 @sync_to_async
 def getGuessTheHeroChannel(uid):
     qs = Guild.objects.filter(guild_id=uid) 
-    if (qs.count() > 0 or qs[0].guess_the_hero is None):
+    if (qs.count() > 0 and qs[0].guess_the_hero is not None):
         return f"<#{str(qs[0].guess_the_hero)}>"
     else:
         return None
