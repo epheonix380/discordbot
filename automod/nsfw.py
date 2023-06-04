@@ -50,7 +50,7 @@ async def handle_nsfw(message):
             continue
         
     if trigger:
-        return
+        return False
     else:
         sentMessage = ""
         if containsEmbeds:
@@ -61,6 +61,7 @@ async def handle_nsfw(message):
         sentBy = f"Sent by: <@{message.author.id}>\n"
         await sentMessage.edit(content=sentBy+sentMessage.content)
         await message.delete()
+        return True
 
 async def handel_regex_nsfw(message):
     trigger = True
@@ -91,7 +92,7 @@ async def handel_regex_nsfw(message):
             print(str(e))
             continue
     if trigger:
-        return
+        return False
     else:
         sentMessage = ""
         if containsEmbeds:
@@ -102,4 +103,5 @@ async def handel_regex_nsfw(message):
         sentBy = f"Sent by: <@{message.author.id}>\n"
         await sentMessage.edit(content=sentBy+sentMessage.content)
         await message.delete()
+        return True
         

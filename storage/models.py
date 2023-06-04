@@ -25,6 +25,9 @@ class GuildActivity(models.Model):
     date = models.DateField(auto_now=True)
     activity = models.IntegerField(default=0)
     word_count = models.IntegerField(default=0)
+    image_count = models.IntegerField(default=0)
+    nsfw_count = models.IntegerField(default=0)
+
 
 class TimeZone(models.Model):
     time_zone = models.CharField(max_length=32, choices=TIMEZONES)
@@ -33,6 +36,14 @@ class Member(models.Model):
     member_id = models.CharField(max_length=24, unique=True)
     time_zone = models.ForeignKey(TimeZone, on_delete=models.CASCADE, default=None, null=True)
     time_format = models.CharField(max_length=64, default="%H:%M on %d-%m-%Y")
+
+class MemberGuildActivity(models.Model):
+    guild = models.ForeignKey(Guild, on_delete=models.CASCADE)
+    member = models.ForeignKey(Member, on_delete=models.CASCADE)
+    activity = models.IntegerField(default=0)
+    word_count = models.IntegerField(default=0)
+    image_count = models.IntegerField(default=0)
+    nsfw_count = models.IntegerField(default=0)
 
 class GuildMemberMap(models.Model):
     guild = models.ForeignKey(Guild, on_delete=models.CASCADE)

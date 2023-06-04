@@ -40,11 +40,12 @@ async def on_message(message: discord.Message):
     if str(message.author.id) == "845668514341191750":
         return
     nsfwChannel = await getNSFWChannel(message.guild.id)
+    is_nsfw = False
     if (nsfwChannel is None or str(nsfwChannel)[2:-1:1] != str(message.channel.id)):
         if message.attachments: #or len(message.embeds)>0:
-            await handle_nsfw(message)
+            is_nsfw = await handle_nsfw(message)
         elif len(arr) != 0:
-            await handel_regex_nsfw(message)
+            is_nsfw = await handel_regex_nsfw(message)
     guessTheHeroChannel = await getGuessTheHeroChannel(message.guild.id)
     if (guessTheHeroChannel is not None and str(guessTheHeroChannel)[2:-1:1] == str(message.channel.id)):
         await guessTheHeroHandler(message=message)
@@ -64,7 +65,7 @@ async def on_message(message: discord.Message):
         await message.channel.send("Here is the activity for this guild", file=discordFile)
     elif message.content.startswith(",test"):
         print("test")
-    await addGuildActivity(message.guild.id, message)
+    await addGuildActivity(message.guild.id, message, is_nsfw)
 
 @tree.command(name="test",description="This is a test command", guild=None)
 async def first_commant(interaction: discord.Interaction):
