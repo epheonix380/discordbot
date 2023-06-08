@@ -38,7 +38,7 @@ def addGuildActivity(guild_id, message:discord.Message, is_nsfw):
     
 @sync_to_async
 def getGuildActivity(guild_id, message:discord.Message):
-    qs = GuildActivity.objects.filter(guild__guild_id=guild_id).order_by("date")
+    qs = GuildActivity.objects.filter(guild__guild_id=guild_id).order_by("-date")
     serializer = GuildActivitySerializer(qs, many=True).data
     workbook = xlsxwriter.Workbook('GuildActivity.xlsx')
     worksheet = workbook.add_worksheet()
@@ -60,7 +60,7 @@ def getGuildActivity(guild_id, message:discord.Message):
 
 @sync_to_async
 def getIndividualGuildID(guild_id, member_id,message:discord.Message):
-    qs = MemberGuildActivity.objects.filter(guild__guild_id=guild_id, member__member_id=member_id)
+    qs = MemberGuildActivity.objects.filter(guild__guild_id=guild_id, member__member_id=member_id).order_by("-date")
     serializer = MemberGuildActivitySerializer(qs, many=True).data
     workbook = xlsxwriter.Workbook('MemberActivity.xlsx')
     worksheet = workbook.add_worksheet()
