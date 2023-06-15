@@ -1,4 +1,4 @@
-from storage.models import Guild, GuildActivity, MemberGuildActivity, Member
+from storage.models import Guild, GuildActivity, MemberGuildActivity, Member, WeightedGuildActivity
 from storage.serializers import GuildActivitySerializer, MemberGuildActivitySerializer
 from asgiref.sync import sync_to_async
 import datetime
@@ -30,7 +30,23 @@ def addGuildActivity(guild_id, message:discord.Message, is_nsfw):
                 gma.nsfw_count = gma.nsfw_count + is_nsfw
             ga.save()
             gma.save()
-        
+        wga = WeightedGuildActivity.objects.filter(guild=guild).order_by("-dateTime")
+        if (wga.count() == 0):
+            wga = WeightedGuildActivity(guild=guild, startingMessage=message.id, activity=1)
+            wga.save()
+        else:
+            wga = wga[0]
+            timeDelta = datetime.datetime.now(tz=datetime.timezone.utc) - wga.dateTime
+            timeDelta = timeDelta.total_seconds()/60
+            if (abs(timeDelta*5) > wga.activity):   
+                if (wga.activity<40): 
+                    wga.delete()
+                wga = WeightedGuildActivity(guild=guild, startingMessage=message.id, activity=0)
+            
+            with transaction.atomic():
+                wga.activity  = wga.activity + 1
+                wga.save()
+            
 
         return isCreated
     else:
