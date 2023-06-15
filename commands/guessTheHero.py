@@ -39,8 +39,8 @@ async def guessHero(interaction:discord.Interaction, hero:str):
             await addGuessCount(guild_id)
             message = await interaction.channel.send(f"<@{interaction.user.id}> guessed {hero}")
             await message.add_reaction("❌")
-        await interaction.response.pong()
-
+        await interaction.response.is_done()
+    await interaction.response.send_message("No Guess the Hero game detected :(")
 
 async def guessTheHeroHandler(message):
     arr = []
