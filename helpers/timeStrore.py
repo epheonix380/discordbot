@@ -20,7 +20,10 @@ def setFormat(uid, time_format):
 def getDefaultTimezone(uid):
     qs = Member.objects.filter(member_id=uid) 
     if (qs.count() > 0):
-        return str(qs[0].time_zone.time_zone)
+        if (qs[0].time_zone is not None):
+            return str(qs[0].time_zone.time_zone)
+        else:
+            return None
     else:
         return None
 
