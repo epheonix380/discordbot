@@ -6,7 +6,7 @@ import pytz
 
 async def handleSummary(message:discord.Message):
     instructions = message.content.split(" ")
-    quantity = 1
+    quantity = 5
     msgContent = []
     if (len(instructions)>1):
         quantity = int(instructions[1])
