@@ -7,6 +7,8 @@ import xlsxwriter
 import pathlib
 import discord
 
+total_msg = 25
+
 @sync_to_async
 def addGuildActivity(guild_id, message:discord.Message, is_nsfw):
     qs = Guild.objects.filter(guild_id=guild_id) 
@@ -38,8 +40,8 @@ def addGuildActivity(guild_id, message:discord.Message, is_nsfw):
             wga = wga[0]
             timeDelta = datetime.datetime.now(tz=datetime.timezone.utc) - wga.dateTime
             timeDelta = timeDelta.total_seconds()/60
-            if (abs(timeDelta*5) > wga.activity):   
-                if (wga.activity<30): 
+            if (abs(timeDelta*4) > wga.activity):   
+                if (wga.activity<total_msg): 
                     wga.delete()
                 wga = WeightedGuildActivity(guild=guild, startingMessage=message.id, activity=0, channel_id=message.channel.id)
             
@@ -98,7 +100,7 @@ def getIndividualGuildID(guild_id, member_id,message:discord.Message):
 
 @sync_to_async
 def getEvents(guild_id, quantity):
-    qs = WeightedGuildActivity.objects.filter(guild__guild_id=guild_id, activity__gte=30).order_by("-dateTime")[0:quantity]
+    qs = WeightedGuildActivity.objects.filter(guild__guild_id=guild_id, activity__gte=total_msg).order_by("-dateTime")[0:quantity]
     if (qs.count() > 0):
         data = WeightedGuildActivitySerializer(qs, many=True).data
         return data
