@@ -28,6 +28,7 @@ from helpers.guildStore import getNSFWChannel, getGuessTheHeroChannel
 from helpers.statsStore import addGuildActivity, getGuildActivity
 from commands.activity import handleActivity
 from commands.help import helpHandler
+from commands.summary import handleSummary
 
 @client.event
 async def on_ready():
@@ -66,6 +67,8 @@ async def on_message(message: discord.Message):
         await saveChoices(message=message)
     elif message.content.startswith(",activity"):
         await handleActivity(message)
+    elif message.content.startswith(",summary"):
+        await handleSummary(message=message)
     elif message.content.startswith(",test"):
         print("test")
     await addGuildActivity(message.guild.id, message, is_nsfw)

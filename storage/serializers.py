@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import MemberTimeZoneMap, TimeZone, Item, GuildActivity, MemberGuildActivity
+from .models import MemberTimeZoneMap, TimeZone, Item, GuildActivity, MemberGuildActivity, WeightedGuildActivity
 
 class ItemSerializer(serializers.ModelSerializer):
     class Meta:
@@ -30,3 +30,12 @@ class MemberGuildActivitySerializer(serializers.ModelSerializer):
     class Meta:
         model = MemberGuildActivity
         fields = '__all__'
+
+class WeightedGuildActivitySerializer(serializers.ModelSerializer):
+    dateTime = serializers.SerializerMethodField()
+    def get_dateTime(self, obj):
+        return obj.dateTime
+
+    class Meta:
+        model = WeightedGuildActivity
+        fields = ['dateTime','channel_id','startingMessage']

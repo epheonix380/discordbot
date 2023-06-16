@@ -32,6 +32,7 @@ class WeightedGuildActivity(models.Model):
     guild = models.ForeignKey(Guild, on_delete=models.CASCADE)
     dateTime = models.DateTimeField(auto_now_add=True)
     activity = models.IntegerField(default=0)
+    channel_id = models.CharField(max_length=32, default=None, null=True)
     startingMessage = models.CharField(max_length=32)
 
 class TimeZone(models.Model):

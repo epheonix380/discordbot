@@ -1,5 +1,5 @@
 from storage.models import Guild, GuildActivity, MemberGuildActivity, Member, WeightedGuildActivity
-from storage.serializers import GuildActivitySerializer, MemberGuildActivitySerializer
+from storage.serializers import GuildActivitySerializer, MemberGuildActivitySerializer, WeightedGuildActivitySerializer
 from asgiref.sync import sync_to_async
 import datetime
 from django.db import transaction
@@ -30,9 +30,9 @@ def addGuildActivity(guild_id, message:discord.Message, is_nsfw):
                 gma.nsfw_count = gma.nsfw_count + is_nsfw
             ga.save()
             gma.save()
-        wga = WeightedGuildActivity.objects.filter(guild=guild).order_by("-dateTime")
+        wga = WeightedGuildActivity.objects.filter(guild=guild, channel_id=message.channel.id).order_by("-dateTime")
         if (wga.count() == 0):
-            wga = WeightedGuildActivity(guild=guild, startingMessage=message.id, activity=1)
+            wga = WeightedGuildActivity(guild=guild, startingMessage=message.id,channel_id=message.channel.id, activity=1)
             wga.save()
         else:
             wga = wga[0]
@@ -41,7 +41,7 @@ def addGuildActivity(guild_id, message:discord.Message, is_nsfw):
             if (abs(timeDelta*5) > wga.activity):   
                 if (wga.activity<40): 
                     wga.delete()
-                wga = WeightedGuildActivity(guild=guild, startingMessage=message.id, activity=0)
+                wga = WeightedGuildActivity(guild=guild, startingMessage=message.id, activity=0, channel_id=message.channel.id)
             
             with transaction.atomic():
                 wga.activity  = wga.activity + 1
@@ -95,6 +95,18 @@ def getIndividualGuildID(guild_id, member_id,message:discord.Message):
         worksheet.write_string(row,4,str(day["nsfw_count"]))
     workbook.close()
     return "MemberActivity.xlsx"
+
+@sync_to_async
+def getEvents(guild_id, quantity):
+    qs = WeightedGuildActivity.objects.filter(guild__guild_id=guild_id).order_by("-dateTime")[1:quantity+1]
+    if (qs.count() > 0):
+        data = WeightedGuildActivitySerializer(qs, many=True).data
+        return data
+    else:
+        return None
+    
+
+
     
 
 
