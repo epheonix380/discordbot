@@ -98,7 +98,7 @@ def getIndividualGuildID(guild_id, member_id,message:discord.Message):
 
 @sync_to_async
 def getEvents(guild_id, quantity):
-    qs = WeightedGuildActivity.objects.filter(guild__guild_id=guild_id).order_by("-dateTime")[1:quantity+1]
+    qs = WeightedGuildActivity.objects.filter(guild__guild_id=guild_id, activity__gte=30).order_by("-dateTime")[0:quantity]
     if (qs.count() > 0):
         data = WeightedGuildActivitySerializer(qs, many=True).data
         return data
