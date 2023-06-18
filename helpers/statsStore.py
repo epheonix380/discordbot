@@ -47,6 +47,7 @@ def addGuildActivity(guild_id, message:discord.Message, is_nsfw):
             
             with transaction.atomic():
                 wga.activity  = wga.activity + 1
+                wga.endingMessage = str(message.id)
                 wga.save()
             
 

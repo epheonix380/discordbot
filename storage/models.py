@@ -34,6 +34,7 @@ class WeightedGuildActivity(models.Model):
     activity = models.IntegerField(default=0)
     channel_id = models.CharField(max_length=32, default=None, null=True)
     startingMessage = models.CharField(max_length=32)
+    endingMessage = models.CharField(max_length=32, default="")
 
 class TimeZone(models.Model):
     time_zone = models.CharField(max_length=32, choices=TIMEZONES)
