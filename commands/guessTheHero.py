@@ -39,10 +39,10 @@ async def guessHero(interaction:discord.Interaction, hero:str):
             await addGuessCount(guild_id)
             message = await interaction.channel.send(f"<@{interaction.user.id}> guessed {hero}")
             await message.add_reaction("❌")
-        await interaction.response.is_done()
+        await interaction.response.send_message("Guessed", ephemeral=True)
     await interaction.response.send_message("No Guess the Hero game detected :(")
 
-async def guessTheHeroHandler(message):
+async def guessTheHeroHandler(message: discord.Message):
     arr = []
     instruction = str(message.content).strip().split(" ")
     for match in re.finditer("https?\:\S+\.(png)|https?\:\S+\.(jpg)|https?\:\S+\.(jpeg)|https?\:\S+\.(gif)", message.content):

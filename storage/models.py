@@ -20,6 +20,17 @@ class Guild(models.Model):
     guess_the_hero = models.CharField(max_length=24, null=True, blank=True, default=None)
     nsfw_channel = models.CharField(max_length=24, null=True, blank=True, default=None)
 
+
+class ChannelCategories(models.IntegerChoices):
+    NSFW = 1, "NSFW"
+    GTH = 2, "Guess The Hero"
+    SUMMARY_IGNORE = 3, "Summary Ignore"
+
+class Channel(models.Model):
+    guild = models.ForeignKey(Guild, on_delete=models.CASCADE)
+    channel_id = models.CharField(max_length=32)
+    category = models.CharField(max_length=32, choices=ChannelCategories.choices, default=ChannelCategories.NSFW)
+
 class GuildActivity(models.Model):
     guild = models.ForeignKey(Guild, on_delete=models.CASCADE)
     date = models.DateField(auto_now_add=True)
@@ -43,6 +54,12 @@ class Member(models.Model):
     member_id = models.CharField(max_length=24, unique=True)
     time_zone = models.ForeignKey(TimeZone, on_delete=models.CASCADE, default=None, null=True)
     time_format = models.CharField(max_length=64, default="%H:%M on %d-%m-%Y")
+    isGym = models.BooleanField(default=False)
+
+class MemberGymDay(models.Model):
+    member = models.ForeignKey(Member, on_delete=models.CASCADE)
+    date = models.DateField(auto_created=True)
+
 
 class MemberGuildActivity(models.Model):
     guild = models.ForeignKey(Guild, on_delete=models.CASCADE)

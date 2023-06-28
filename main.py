@@ -1,4 +1,10 @@
 import discord
+from threading import Thread
+from datetime import datetime
+import time
+import asyncio
+from asgiref.sync import async_to_sync
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from discord import app_commands
 from dotenv import load_dotenv
 from django.conf import settings
@@ -29,6 +35,7 @@ from helpers.statsStore import addGuildActivity, getGuildActivity
 from commands.activity import handleActivity
 from commands.help import helpHandler
 from commands.summary import handleSummary
+from commands.gym import handleDailyGym, handleGymOptIn
 
 @client.event
 async def on_ready():
@@ -70,7 +77,7 @@ async def on_message(message: discord.Message):
     elif message.content.startswith(",summary"):
         await handleSummary(message=message)
     elif message.content.startswith(",test"):
-        print("test")
+        await handleGymOptIn(message=message)
     await addGuildActivity(message.guild.id, message, is_nsfw)
 
 @tree.command(name="test",description="This is a test command", guild=None)
@@ -92,6 +99,16 @@ async def first_commant(interaction: discord.Interaction,hero:str):
 async def on_ready():
     list = await tree.sync(guild=None)
     print("Ready!")
-    
 
-client.run(TOKEN)
+async def tick():
+    await handleDailyGym(client=client)
+
+    
+scheduler = AsyncIOScheduler()
+scheduler.add_job(tick, 'interval', seconds=15)
+scheduler.start()
+loop = asyncio.get_event_loop()
+loop.create_task(client.start(TOKEN))
+loop.run_forever()
+
+
