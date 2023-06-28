@@ -32,7 +32,7 @@ async def handleDailyGym(client: discord.Client):
         else:
             defaultTimezone = pytz.timezone(defaultTimezone)
         memberTime = datetime.datetime.now(tz=defaultTimezone)
-        if memberTime.hour == 21 and member["isGym"]:
+        if memberTime.hour == 22 and member["isGym"]:
             user:discord.User = await client.fetch_user(str(member["member_id"]))
             user_dm = await user.create_dm()
             await user_dm.send("Gym Checkin Test!")
