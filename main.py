@@ -105,7 +105,7 @@ async def tick():
 
     
 scheduler = AsyncIOScheduler()
-scheduler.add_job(tick, 'interval', seconds=15)
+scheduler.add_job(tick, 'interval', hours=1)
 scheduler.start()
 loop = asyncio.get_event_loop()
 loop.create_task(client.start(TOKEN))
