@@ -59,6 +59,7 @@ class Member(models.Model):
 class MemberGymDay(models.Model):
     member = models.ForeignKey(Member, on_delete=models.CASCADE)
     date = models.DateField(auto_created=True)
+    isGym = models.BooleanField()
 
 
 class MemberGuildActivity(models.Model):
