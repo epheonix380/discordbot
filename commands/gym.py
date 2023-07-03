@@ -2,7 +2,7 @@ import datetime
 import discord
 from storage.models import Member, MemberGymDay
 from storage.serializers import MemberSerializer
-from helpers.timeStrore import getDefaultTimezone
+from helpers.timeStrore import getDefaultTimezone, getFormat
 import pytz
 from asgiref.sync import sync_to_async
 
@@ -38,7 +38,11 @@ class GymButtonYes(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         await setMemberGymDaily(member_id=self.member_id, date=self.date, isGym=True)
-        await interaction.channel.send("Recorded")
+        await interaction.message.delete()
+        format = await getFormat(self.member_id)
+        formatedDate = self.date.strftime(format)
+        await interaction.channel.send(f"Recorded as Yes for {formatedDate}")
+        self.date.strftime()
 
 class GymButtonNo(discord.ui.Button):
     def __init__(self, member_id:str, date:datetime.date):
@@ -50,7 +54,11 @@ class GymButtonNo(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         await setMemberGymDaily(member_id=self.member_id, date=self.date, isGym=False)
-        await interaction.channel.send("Recorded")
+        await interaction.message.delete()
+        format = await getFormat(self.member_id)
+        formatedDate = self.date.strftime(format)
+        await interaction.channel.send(f"Recorded as No for {formatedDate}")
+
 
 
 
