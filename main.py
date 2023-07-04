@@ -43,6 +43,18 @@ async def on_ready():
 
 @client.event
 async def on_message(message: discord.Message):
+    if message.guild is None:
+        if message.content.startswith(",time") or  message.content.startswith("time"):
+            await timeHandler(message=message)
+        elif message.content.startswith(",help") or message.content.startswith("help"):
+            await helpHandler(message=message)
+        elif message.content.startswith(",choose") or message.content.startswith("choose"):
+            await choices(message=message)
+        elif message.content.startswith(",choices") or message.content.startswith("choices"):
+            await saveChoices(message=message)
+        elif message.content.startswith(",gymOptIn") or message.content.startswith("gymOptIn"):
+            await handleGymOptIn(message=message)
+        return
     arr = []
     for match in re.finditer("https?\:\S+\.(png)|https?\:\S+\.(jpg)|https?\:\S+\.(jpeg)|https?\:\S+\.(gif)", message.content):
         if match.group(0) is not None:
