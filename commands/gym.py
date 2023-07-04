@@ -20,7 +20,6 @@ async def handleGymOptIn(message:discord.Message):
 def getMembersHelper():
     qs =  Member.objects.filter(isGym=True)
     data = MemberSerializer(qs, many=True).data
-    print(data)
     return data
 
 @sync_to_async
@@ -39,7 +38,8 @@ class GymButtonYes(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         await setMemberGymDaily(member_id=self.member_id, date=self.date, isGym=True)
         await interaction.message.delete()
-        format = await getFormat(self.member_id)
+        format:str = await getFormat(self.member_id)
+        format = format.replace("%H","").replace("%M","").replace("%I","").replace("%p","").replace(":","")
         formatedDate = self.date.strftime(format)
         await interaction.channel.send(f"Recorded as Yes for {formatedDate}")
         self.date.strftime()
@@ -76,9 +76,7 @@ async def sendGymMessage(user_dm:discord.DMChannel, date:datetime.date):
 async def handleDailyGym(client: discord.Client):
     members = await getMembersHelper()
     for member in members:
-        print(member)
         defaultTimezone = await getDefaultTimezone(str(member["member_id"]))
-        print(defaultTimezone)
         if defaultTimezone is None:
             defaultTimezone = datetime.timezone.utc
         else:
