@@ -79,9 +79,7 @@ async def on_message(message: discord.Message):
     elif message.content.startswith(",gymOptIn"):
         await handleGymOptIn(message=message)
     elif message.content.startswith(",test"):
-        user:discord.User = await client.fetch_user("218174413604913152")
-        user_dm = await user.create_dm()
-        await sendGymMessage(user_dm=user_dm, date=datetime.now().date())
+        await handleDailyGym(client=client)
     await addGuildActivity(message.guild.id, message, is_nsfw)
 
 @tree.command(name="test",description="This is a test command", guild=None)

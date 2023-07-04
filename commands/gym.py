@@ -76,7 +76,9 @@ async def sendGymMessage(user_dm:discord.DMChannel, date:datetime.date):
 async def handleDailyGym(client: discord.Client):
     members = await getMembersHelper()
     for member in members:
+        print(member)
         defaultTimezone = await getDefaultTimezone(str(member["member_id"]))
+        print(defaultTimezone)
         if defaultTimezone is None:
             defaultTimezone = datetime.timezone.utc
         else:
