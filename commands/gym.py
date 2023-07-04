@@ -82,7 +82,10 @@ async def handleDailyGym(client: discord.Client):
         if defaultTimezone is None:
             defaultTimezone = datetime.timezone.utc
         else:
-            defaultTimezone = pytz.timezone(defaultTimezone)
+            try:
+                defaultTimezone = pytz.timezone(defaultTimezone)
+            except:
+                defaultTimezone = datetime.timezone.utc
         memberTime = datetime.datetime.now(tz=defaultTimezone)
         if memberTime.hour == 22 and member["isGym"]:
             user:discord.User = await client.fetch_user(str(member["member_id"]))
