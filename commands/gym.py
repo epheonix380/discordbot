@@ -1,5 +1,6 @@
 import datetime
 import discord
+from django.db import models
 from storage.models import Member, MemberGymDay
 from storage.serializers import MemberSerializer
 from helpers.timeStrore import getDefaultTimezone, getFormat
@@ -25,7 +26,9 @@ def getMembersHelper():
 @sync_to_async
 def setMemberGymDaily(member_id:str, date:datetime.date,isGym:bool):
     member = Member.objects.get(member_id=member_id)
+    print(member)
     memberGymDay = MemberGymDay(member=member, date=date, isGym=isGym)
+    print(memberGymDay)
     memberGymDay.save()
 
 class GymButtonYes(discord.ui.Button):
@@ -36,13 +39,20 @@ class GymButtonYes(discord.ui.Button):
         self.label = "Yes"
 
     async def callback(self, interaction: discord.Interaction):
-        await setMemberGymDaily(member_id=self.member_id, date=self.date, isGym=True)
-        await interaction.message.delete()
-        format:str = await getFormat(self.member_id)
-        format = format.replace("%H","").replace("%M","").replace("%I","").replace("%p","").replace(":","")
-        formatedDate = self.date.strftime(format)
-        await interaction.channel.send(f"Recorded as Yes for {formatedDate}")
-        self.date.strftime()
+        try:
+            await setMemberGymDaily(member_id=self.member_id, date=self.date, isGym=True)
+            await interaction.message.delete()
+            format:str = await getFormat(self.member_id)
+            format = format.replace("%H","").replace("%M","").replace("%I","").replace("%p","").replace(":","")
+            formatedDate = self.date.strftime(format)
+            await interaction.channel.send(f"Recorded as Yes for {formatedDate}")
+        except models.Model.DoesNotExist:
+            print("Member Does not exist")
+        except:
+            print(self)
+            print(self.member_id)
+            print(self.date)
+ 
 
 class GymButtonNo(discord.ui.Button):
     def __init__(self, member_id:str, date:datetime.date):
@@ -53,11 +63,23 @@ class GymButtonNo(discord.ui.Button):
 
 
     async def callback(self, interaction: discord.Interaction):
-        await setMemberGymDaily(member_id=self.member_id, date=self.date, isGym=False)
-        await interaction.message.delete()
-        format = await getFormat(self.member_id)
-        formatedDate = self.date.strftime(format)
-        await interaction.channel.send(f"Recorded as No for {formatedDate}")
+        try:
+            await setMemberGymDaily(member_id=self.member_id, date=self.date, isGym=False)
+            await interaction.message.delete()
+            format:str = await getFormat(self.member_id)
+            format = format.replace("%H","").replace("%M","").replace("%I","").replace("%p","").replace(":","")
+            formatedDate = self.date.strftime(format)
+            await interaction.channel.send(f"Recorded as No for {formatedDate}")
+        except models.Model.DoesNotExist:
+            print("Member Does not exist")
+        except:
+            print(self)
+            print(self.member_id)
+            print(self.date)
+
+
+
+
 
 
 
