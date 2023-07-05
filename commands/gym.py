@@ -25,8 +25,9 @@ def getMembersHelper():
 
 @sync_to_async
 def setMemberGymDaily(member_id:str, date:datetime.date,isGym:bool):
-    member = Member.objects.get(member_id=member_id)
+    [member, isMember] = Member.objects.get_or_create(member_id=member_id)
     print(member)
+    print(isMember)
     memberGymDay = MemberGymDay(member=member, date=date, isGym=isGym)
     print(memberGymDay)
     memberGymDay.save()
