@@ -89,6 +89,8 @@ async def handleGym(message:discord.Message, client:discord.Client):
                 await user_dm.send(f"Looks like you already checked in today and said that you **{'did' if checkin else 'did not'} do** exercise")
             else:
                 await sendGymMessage(user_dm=user_dm, date=memberTime.date())
+        elif instructions[1] == "register":
+            await handleGymOptIn(message=message)
     else:
         await message.channel.send("Specifier required")
     await message.delete()

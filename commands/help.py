@@ -29,6 +29,14 @@ async def helpHandler(message:discord.Message):
             ```,activity``` get the activity on this server
             ```,admin @user``` get the activity of user on this server
             """)
+        elif (instructions[1] == "gym"):
+            await message.channel.send("""
+            ```,gym time``` gets your checkin time for the gym checkin. This is in your default timezone
+            ```,gym time <time>``` sets your checkin time for the gym checkin. This is in your default timezone
+            ```,time default <city name>``` sets your default timezone to city name
+            ```,gym checkin``` manually checkin, this is incase you want to do it earlier in  the  day or if the bot has not sent the message for some reason
+            ```,gym register``` register for the exercise challenge!
+            """)
     else:
         await message.channel.send("""
         Welcome to Big Tiddy goth GF
@@ -43,5 +51,7 @@ async def helpHandler(message:discord.Message):
         ,admin\n
         SERVER STATS: These command shows server stats for individuals and the server as a whole. Use ,help activity for more info
         ,activity\n
+        Exercise Logging: These commands help log your daily exercise for the challenge! Use ,help gym for more info
+        ,gym\n
         """)
     await message.delete()
