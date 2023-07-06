@@ -54,6 +54,8 @@ async def on_message(message: discord.Message):
             await saveChoices(message=message)
         elif message.content.startswith(",gymOptIn") or message.content.startswith("gymOptIn"):
             await handleGymOptIn(message=message)
+        elif message.content.startswith(",gym") or message.content.startswith("gym"):
+            await handleGym(message=message,client=client)
         return
     arr = []
     for match in re.finditer("https?\:\S+\.(png)|https?\:\S+\.(jpg)|https?\:\S+\.(jpeg)|https?\:\S+\.(gif)", message.content):
