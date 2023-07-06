@@ -57,6 +57,7 @@ class Member(models.Model):
     time_format = models.CharField(max_length=64, default="%H:%M on %d-%m-%Y")
     isGym = models.BooleanField(default=False)
     gymCheckinTime = models.TimeField(default=datetime.time(hour=22))
+    lastGymCheckinDate = models.DateField(default=datetime.datetime.now().date())
 
 class MemberGymDay(models.Model):
     member = models.ForeignKey(Member, on_delete=models.CASCADE)

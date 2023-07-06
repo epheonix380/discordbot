@@ -23,6 +23,24 @@ def getMemberTime(uid):
         return None
     
 @sync_to_async
+def getMemberDate(uid):
+    try:
+        member = Member.objects.get(member_id=uid)
+        return member.lastGymCheckinDate
+    except:
+        return None
+    
+@sync_to_async
+def setMemberDate(uid, date:datetime.date):
+    try:
+        member = Member.objects.get(member_id=uid)
+        member.lastGymCheckinDate = date
+        member.save()
+        return True
+    except:
+        return None
+    
+@sync_to_async
 def setMemberTime(message:discord.Message, time:datetime.time):
     try:
         member = Member.objects.get(member_id=message.author.id)
@@ -181,6 +199,12 @@ async def handleDailyGym(client: discord.Client):
                 print("Already checked in")
                 print(user.global_name)
             else:
-                await sendGymMessage(user_dm=user_dm, date=memberTime.date())
+                lastSentData:datetime.date = await getMemberDate(member["member_id"])
+                if memberTime.date() == lastSentData:
+                    print("Already sent message")
+                    print(user.global_name)
+                else:
+                    await sendGymMessage(user_dm=user_dm, date=memberTime.date())
+                    await setMemberDate(member["member_id"], memberTime.date())
 
        
