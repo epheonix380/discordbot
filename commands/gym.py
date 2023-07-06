@@ -171,7 +171,7 @@ async def handleDailyGym(client: discord.Client):
                 defaultTimezone = datetime.timezone.utc
         memberTime = datetime.datetime.now(tz=defaultTimezone)
         checkinTime:datetime.time = await getMemberTime(member["member_id"])
-        if memberTime.hour == checkinTime.hour and member["isGym"]:
+        if memberTime.hour == checkinTime.hour and memberTime.time()>=checkinTime and member["isGym"]:
             checkin = await getIsMemberCheckedIn(member["member_id"], memberTime.date())
             user:discord.User = await client.fetch_user(str(member["member_id"]))
             user_dm = await user.create_dm()
