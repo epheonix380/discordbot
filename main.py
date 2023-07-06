@@ -92,7 +92,7 @@ async def on_message(message: discord.Message):
         await handleGymOptIn(message=message)
     elif message.content.startswith(",test"):
         print(message.author.id)
-        user:discord.User = await client.fetch_user(user_id=message.author.id)
+        user:discord.User = await client.fetch_user(message.author.id)
         print(user)
         user_dm = await user.create_dm()
         print(user_dm)
