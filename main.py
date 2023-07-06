@@ -90,9 +90,12 @@ async def on_message(message: discord.Message):
         await handleSummary(message=message)
     elif message.content.startswith(",gymOptIn"):
         await handleGymOptIn(message=message)
-    elif message.content.startswith(",test") and str(message.author.id) == "218174413604913152":
-        user:discord.User = await client.fetch_user(user_id="380666195407536128")
+    elif message.content.startswith(",test"):
+        print(message.author.id)
+        user:discord.User = await client.fetch_user(user_id=message.author.id)
+        print(user)
         user_dm = await user.create_dm()
+        print(user_dm)
         await sendGymMessage(user_dm=user_dm, date=datetime.now().date())
     await addGuildActivity(message.guild.id, message, is_nsfw)
 
