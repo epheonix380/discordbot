@@ -42,6 +42,15 @@ def getMembersHelper():
     return data
 
 @sync_to_async
+def getIsMemberCheckedIn(uid, date:datetime.date):
+    qs = MemberGymDay.objects.filter(member__member_id=uid, date=date)
+    if qs.count() == 0:
+        return None
+    else:
+        return qs[0].isGym
+
+
+@sync_to_async
 def setMemberGymDaily(member_id:str, date:datetime.date,isGym:bool):
     [member, isMember] = Member.objects.get_or_create(member_id=member_id)
     print(member)
@@ -50,7 +59,7 @@ def setMemberGymDaily(member_id:str, date:datetime.date,isGym:bool):
     print(memberGymDay)
     memberGymDay.save()
 
-async def handleGym(message:discord.Message):
+async def handleGym(message:discord.Message, client:discord.Client):
     instructions = message.content.split(" ")
     if (len(instructions) > 1):
         if instructions[1] == "time":
@@ -62,6 +71,24 @@ async def handleGym(message:discord.Message):
             else:
                 formatedTime = memberTime.strftime(timeFormat)
                 await message.channel.send(f"Your current checkin time is: {formatedTime}")
+        elif instructions[1] == "checkin":
+            
+            defaultTimezone = await getDefaultTimezone(message.author.id)
+            if defaultTimezone is None:
+                defaultTimezone = datetime.timezone.utc
+            else:
+                try:
+                    defaultTimezone = pytz.timezone(defaultTimezone)
+                except:
+                    defaultTimezone = datetime.timezone.utc
+            memberTime:datetime.datetime = datetime.datetime.now(tz=defaultTimezone)
+            user:discord.User = await client.fetch_user(message.author.id)
+            user_dm = await user.create_dm()
+            checkin = await getIsMemberCheckedIn(message.author.id, memberTime.date())
+            if checkin is not None:
+                await user_dm.send(f"Looks like you already checked in today and said that you **{'did' if checkin else 'did not'} do** exercise")
+            else:
+                await sendGymMessage(user_dm=user_dm, date=memberTime.date())
     else:
         await message.channel.send("Specifier required")
     await message.delete()
@@ -145,8 +172,12 @@ async def handleDailyGym(client: discord.Client):
         memberTime = datetime.datetime.now(tz=defaultTimezone)
         checkinTime:datetime.time = await getMemberTime(member["member_id"])
         if memberTime.hour == checkinTime.hour and member["isGym"]:
+            checkin = await getIsMemberCheckedIn(member["member_id"], memberTime.date())
             user:discord.User = await client.fetch_user(str(member["member_id"]))
             user_dm = await user.create_dm()
-            await sendGymMessage(user_dm=user_dm, date=memberTime.date())
+            if checkin is not None:
+                await user_dm.send(f"Looks like you already checked in today and said that you **{'did' if checkin else 'did not'} do** exercise")
+            else:
+                await sendGymMessage(user_dm=user_dm, date=memberTime.date())
 
        
