@@ -4,6 +4,7 @@ from django.db import models
 from storage.models import Member, MemberGymDay
 from storage.serializers import MemberSerializer
 from helpers.timeStrore import getDefaultTimezone, getFormat
+from helpers.timeUtils import getTimeFromString
 import pytz
 from asgiref.sync import sync_to_async
 
@@ -12,6 +13,23 @@ def handleGymOptInHelper(message:discord.Message):
     [member, isCreated] = Member.objects.get_or_create(member_id=message.author.id)
     member.isGym = True
     member.save()
+
+@sync_to_async
+def getMemberTime(uid):
+    try:
+        member = Member.objects.get(member_id=uid)
+        return member.gymCheckinTime
+    except:
+        return None
+    
+@sync_to_async
+def setMemberTime(message:discord.Message, time:datetime.time):
+    try:
+        member = Member.objects.get(member_id=message.author.id)
+        member.gymCheckinTime = time
+        member.save()
+    except:
+        return False
 
 async def handleGymOptIn(message:discord.Message):
     await handleGymOptInHelper(message)
@@ -31,6 +49,23 @@ def setMemberGymDaily(member_id:str, date:datetime.date,isGym:bool):
     memberGymDay = MemberGymDay(member=member, date=date, isGym=isGym)
     print(memberGymDay)
     memberGymDay.save()
+
+async def handleGym(message:discord.Message):
+    instructions = message.content.split(" ")
+    if (len(instructions) > 1):
+        if instructions[1] == "time":
+            memberTime:datetime.time = await getMemberTime(message.author.id)
+            timeFormat = await getFormat(message.author.id)
+            if len(instructions) > 2:
+                time = getTimeFromString("".join(instructions[2::]))
+                await setMemberTime(message,time)
+            else:
+                formatedTime = memberTime.strftime(timeFormat)
+                await message.channel.send(f"Your current checkin time is: {formatedTime}")
+    else:
+        await message.channel.send("Specifier required")
+    await message.delete()
+
 
 class GymButtonYes(discord.ui.Button):
     def __init__(self, member_id:str, date:datetime.date):
@@ -108,7 +143,8 @@ async def handleDailyGym(client: discord.Client):
             except:
                 defaultTimezone = datetime.timezone.utc
         memberTime = datetime.datetime.now(tz=defaultTimezone)
-        if memberTime.hour == 22 and member["isGym"]:
+        checkinTime:datetime.time = await getMemberTime(member["member_id"])
+        if memberTime.hour == checkinTime.hour and member["isGym"]:
             user:discord.User = await client.fetch_user(str(member["member_id"]))
             user_dm = await user.create_dm()
             await sendGymMessage(user_dm=user_dm, date=memberTime.date())

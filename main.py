@@ -35,7 +35,7 @@ from helpers.statsStore import addGuildActivity, getGuildActivity
 from commands.activity import handleActivity
 from commands.help import helpHandler
 from commands.summary import handleSummary
-from commands.gym import handleDailyGym, handleGymOptIn, sendGymMessage
+from commands.gym import handleDailyGym, handleGymOptIn, sendGymMessage, handleGym
 
 @client.event
 async def on_ready():
@@ -90,13 +90,14 @@ async def on_message(message: discord.Message):
         await handleSummary(message=message)
     elif message.content.startswith(",gymOptIn"):
         await handleGymOptIn(message=message)
-    elif message.content.startswith(",test"):
-        print(message.author.id)
+    elif message.content.startswith(",gym"):
+        await handleGym(message=message)
+    elif message.content.startswith("checkin"):
         user:discord.User = await client.fetch_user(message.author.id)
-        print(user)
         user_dm = await user.create_dm()
-        print(user_dm)
         await sendGymMessage(user_dm=user_dm, date=datetime.now().date())
+    elif message.content.startswith(",test") and message.author.id == "218174413604913152":
+        await handleDailyGym(client=client)
     await addGuildActivity(message.guild.id, message, is_nsfw)
 
 @tree.command(name="test",description="This is a test command", guild=None)

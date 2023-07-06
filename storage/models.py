@@ -1,5 +1,6 @@
 from django.db import models
 import pytz
+import datetime
 TIMEZONES = tuple(zip(pytz.all_timezones, pytz.all_timezones))
 
 # Create your models here.
@@ -55,6 +56,7 @@ class Member(models.Model):
     time_zone = models.ForeignKey(TimeZone, on_delete=models.CASCADE, default=None, null=True)
     time_format = models.CharField(max_length=64, default="%H:%M on %d-%m-%Y")
     isGym = models.BooleanField(default=False)
+    gymCheckinTime = models.TimeField(default=datetime.time(hour=22))
 
 class MemberGymDay(models.Model):
     member = models.ForeignKey(Member, on_delete=models.CASCADE)
