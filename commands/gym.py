@@ -177,6 +177,7 @@ async def handleDailyGym(client: discord.Client):
             user_dm = await user.create_dm()
             if checkin is not None:
                 print("Already checked in")
+                print(user.global_name)
             else:
                 await sendGymMessage(user_dm=user_dm, date=memberTime.date())
 
