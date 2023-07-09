@@ -4,7 +4,7 @@ import requests
 import re
 classifier = NudeClassifier()
 
-async def handle_nsfw(message):
+async def handle_nsfw(message: discord.Message):
     trigger = True
     nsfw_count = 0
     containsEmbeds = False
@@ -14,17 +14,17 @@ async def handle_nsfw(message):
     for thing in message.attachments:
         try:
             img_data = requests.get(thing.url).content
-            with open(f"SPOILER_{i}.png", "wb") as handler:
+            with open(f"SPOILER_{i}_{thing.filename}", "wb") as handler:
                 handler.write(img_data)
-                obj = classifier.classify(f"SPOILER_{i}.png")
-                if obj[f"SPOILER_{i}.png"]['safe']< 0.4 or (message.author.id == "226315767564599297" and obj[f"SPOILER_{i}.png"]['safe']< 0.75):
+                obj = classifier.classify(f"SPOILER_{i}_{thing.filename}")
+                if obj[f"SPOILER_{i}_{thing.filename}"]['safe']< 0.4 or (message.author.id == "226315767564599297" and obj[f"SPOILER_{i}_{thing.filename}"]['safe']< 0.75):
                     nsfw_count = nsfw_count + 1
                     trigger = trigger and False
-                    files.append(discord.File(f"SPOILER_{i}.png"))
+                    files.append(discord.File(f"SPOILER_{i}_{thing.filename}"))
                 else:
-                    with open(f"{i}.png", "wb") as handler:
+                    with open(f"{i}_{thing.filename}", "wb") as handler:
                         handler.write(img_data)
-                        files.append(discord.File(f"{i}.png"))
+                        files.append(discord.File(f"{i}_{thing.filename}"))
                         trigger = trigger and True
                 i = i+1
         except:
@@ -32,18 +32,18 @@ async def handle_nsfw(message):
     for embed in message.embeds:
         try:
             img_data = requests.get(embed.url).content
-            with open(f"SPOILER_{i}.png", "wb") as handler:
+            with open(f"SPOILER_{i}_{thing.filename}", "wb") as handler:
                 handler.write(img_data)
-                obj = classifier.classify(f"SPOILER_{i}.png")
-                if obj[f"SPOILER_{i}.png"]['safe']< 0.4 or (message.author.id == "226315767564599297" and obj[f"SPOILER_{i}.png"]['safe']< 0.75):
+                obj = classifier.classify(f"SPOILER_{i}_{thing.filename}")
+                if obj[f"SPOILER_{i}_{thing.filename}"]['safe']< 0.4 or (message.author.id == "226315767564599297" and obj[f"SPOILER_{i}_{thing.filename}"]['safe']< 0.75):
                     nsfw_count = nsfw_count + 1
                     containsEmbeds = True
                     trigger = trigger and False
-                    files.append(discord.File(f"SPOILER_{i}.png"))
+                    files.append(discord.File(f"SPOILER_{i}_{thing.filename}"))
                 else:
-                    with open(f"{i}.png", "wb") as handler:
+                    with open(f"{i}_{thing.filename}", "wb") as handler:
                         handler.write(img_data)
-                        files.append(discord.File(f"{i}.png"))
+                        files.append(discord.File(f"{i}_{thing.filename}"))
                         trigger = trigger and True
                 i=i+1
         except Exception as e:

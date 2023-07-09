@@ -2,16 +2,16 @@ import discord
 import requests
 import re
 
-async def manual_nsfw(message):
+async def manual_nsfw(message: discord.Message):
     if (message.reference and message.reference.resolved):
         print("insignificant change")
         i = 0
         files = []
         for thing in message.reference.resolved.attachments:
             img_data = requests.get(thing.url).content
-            with open(f"SPOILER_{i}.png", "wb") as handler:
+            with open(f"SPOILER_{i}_{thing.filename}", "wb") as handler:
                 handler.write(img_data)
-                files.append(discord.File(f"SPOILER_{i}.png"))
+                files.append(discord.File(f"SPOILER_{i}_{thing.filename}"))
                 i = i+1
         content = ""
         if (len(str(message.reference.resolved.content)) > 0):
