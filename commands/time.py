@@ -235,7 +235,7 @@ async def timeHandler(message:discord.Message):
             city = "_".join(instruction[1::]).strip()
             formatedCityName = " ".join(instruction[1::]).strip()
             content = f"Error, a city with name **{formatedCityName}** could not be found"
-            [timezone, isCityNameExact] = timezone_finder(formatedCityName)
+            [timezone, isCityNameExact] = timezone_finder(city)
             if timezone is not None:
                 timeZone = pytz.timezone(timezone)
             if timeZone != "DEFAULT":
