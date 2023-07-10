@@ -1,9 +1,20 @@
 import re
 import pytz
 import datetime
+import discord
 from helpers.timeStrore import getDefaultTimezone, setDefaultTimezone, addTimezone, removeTimezone, getTimezones, getFormat, setFormat
+from pytz import all_timezones
 
-async def timeHandler(message):
+def timezone_finder(cityname:str):
+    for timezone in all_timezones:
+        if re.search(f"[\w\_]*\/{cityname.lower()}",timezone.lower()) is not None:
+            return [timezone, True]
+    for timezone in all_timezones:
+        if cityname in timezone:
+            return [timezone, False]
+    return [None, False]
+
+async def timeHandler(message:discord.Message):
     instruction = str(message.content).strip().split(" ")
     timeFormat = await getFormat(message.author.id)
     firstInstruction = "ball"
@@ -80,13 +91,11 @@ async def timeHandler(message):
             timeString =  timeStringRaw.group(0)
             cityToConvertFrom = "_".join(re.sub("\d?\d\:\d\d(am)?(pm)?","",cities[0]).strip().split(" "))
             content = f"Error one of these city names wasn't found:\n**{cityToConvertFrom}**\n**{cityToConvertTo}**"
-            from pytz import all_timezones
-            for timezone in all_timezones:
-                if re.search(f"[\w\_]*\/{cityToConvertTo.lower()}",timezone.lower()) is not None:
-                    toCode = timezone
-                if re.search(f"[\w\_]*\/{cityToConvertFrom.lower()}",timezone.lower()) is not None:
-                    fromCode = timezone
-            if toCode != "DEFAULT" and fromCode != "DEFAUT":               
+            [toCode, toCodeIsExact] = timezone_finder(cityToConvertTo)
+            [fromCode, fromCodeIsExact] = timezone_finder(cityToConvertFrom)
+            if toCode != "DEFAULT" and fromCode != "DEFAUT":  
+                if not toCodeIsExact or not fromCodeIsExact:
+                    await message.channel.send(f"We could not find an exact match for your city so we used the closest match:\n{toCode+' was substituted for '+cityToConvertTo if not toCodeIsExact else ''}\n{fromCode+' was substituted for '+cityToConvertFrom if not fromCodeIsExact else ''}")    
                 hour = int(timeString.split(":")[0])
                 minute = int(timeString.split(":")[1][0:2])
                 if (len(timeString.split(":")[1])==4 and timeString.split(":")[1][2:4].lower()=="pm"):
@@ -108,13 +117,11 @@ async def timeHandler(message):
                 content = "No default timezone found:\nThis version of the command requires you to set a default timezone if you do not want to set one you can use this command instead:\n```,time convert <time> <from-city-name> to <to-city-name>```\nOr you can set your default timezone using this command:\n```,time default <city-name>```"
                 return await message.channel.send(content)
             timeString =  timeStringRaw.group(0)
-            from pytz import all_timezones
-            for timezone in all_timezones:
-                if re.search(f"[\w\_]*\/{cityToConvertTo.lower()}",timezone.lower()) is not None:
-                    toCode = timezone
-                if re.search(f"[\w\_]*\/{cityToConvertFrom.lower()}",timezone.lower()) is not None:
-                    fromCode = timezone
-            if toCode != "DEFAULT" and fromCode != "DEFAUT":                    
+            [toCode, toCodeIsExact] = timezone_finder(cityToConvertTo)
+            [fromCode, fromCodeIsExact] = timezone_finder(cityToConvertFrom)
+            if toCode != "DEFAULT" and fromCode != "DEFAUT":     
+                if not toCodeIsExact or not fromCodeIsExact:
+                    await message.channel.send(f"We could not find an exact match for your city so we used the closest match:\n{toCode+' was substituted for '+cityToConvertTo if not toCodeIsExact else ''}\n{fromCode+' was substituted for '+cityToConvertFrom if not fromCodeIsExact else ''}")                   
                 hour = int(timeString.split(":")[0])
                 minute = int(timeString.split(":")[1][0:2])
                 if (len(timeString.split(":")[1])==4 and timeString.split(":")[1][2:4].lower()=="pm"):
@@ -227,11 +234,12 @@ async def timeHandler(message):
             city = "_".join(instruction[1::]).strip()
             formatedCityName = " ".join(instruction[1::]).strip()
             content = f"Error, a city with name **{formatedCityName}** could not be found"
-            from pytz import all_timezones
-            for timezone in all_timezones:
-                if re.search(f"[\w\_]*\/{city.lower()}",timezone.lower()) is not None:
-                    timeZone = pytz.timezone(timezone)
+            [timezone, isCityNameExact] = timezone_finder(formatedCityName)
+            if timezone is not None:
+                timeZone = pytz.timezone(timezone)
             if timeZone != "DEFAULT":
+                if not isCityNameExact:
+                    await message.channel.send(f"We could not find an exact match for your city so we used the closest match:\n{timezone+' was substituted for '+formatedCityName if not isCityNameExact else ''}")    
                 convertedTime = datetime.datetime.now().astimezone(timeZone)
                 content = f"Time in {formatedCityName} is " + convertedTime.strftime(timeFormat)
             await message.channel.send(content)

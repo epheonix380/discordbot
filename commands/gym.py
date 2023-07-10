@@ -176,6 +176,7 @@ class GymButtonNo(discord.ui.Button):
 class GymView(discord.ui.View):
     def __init__(self , member_id:str, date:datetime.date):
         super().__init__()
+        self.timeout = None
         self.add_item(GymButtonNo(member_id=member_id, date=date))
         self.add_item(GymButtonYes(member_id=member_id, date=date))
 
