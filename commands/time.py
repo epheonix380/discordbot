@@ -4,14 +4,15 @@ import datetime
 import discord
 from helpers.timeStrore import getDefaultTimezone, setDefaultTimezone, addTimezone, removeTimezone, getTimezones, getFormat, setFormat
 from pytz import all_timezones
+from fuzzyfinder import fuzzyfinder
 
 def timezone_finder(cityname:str):
     for timezone in all_timezones:
         if re.search(f"[\w\_]*\/{cityname.lower()}",timezone.lower()) is not None:
             return [timezone, True]
-    for timezone in all_timezones:
-        if cityname in timezone:
-            return [timezone, False]
+    results = list(fuzzyfinder(cityname, all_timezones))
+    if len(results) > 0:
+        return [results[0], False]
     return [None, False]
 
 async def timeHandler(message:discord.Message):
