@@ -103,10 +103,11 @@ async def handleGym(message:discord.Message, client:discord.Client):
             user:discord.User = await client.fetch_user(message.author.id)
             user_dm = await user.create_dm()
             checkin = await getIsMemberCheckedIn(message.author.id, memberTime.date())
+            timeFormat = await getFormat(message.author.id)
             if checkin is not None:
                 await user_dm.send(f"Looks like you already checked in today and said that you **{'did' if checkin else 'did not'} do** exercise")
             else:
-                await sendGymMessage(user_dm=user_dm, date=memberTime.date())
+                await sendGymMessage(user_dm=user_dm, date=memberTime.date(), format=timeFormat)
         elif instructions[1] == "register":
             await handleGymOptIn(message=message)
     else:
@@ -131,7 +132,9 @@ class GymButtonYes(discord.ui.Button):
             await interaction.channel.send(f"Recorded as Yes for {formatedDate}")
         except models.Model.DoesNotExist:
             print("Member Does not exist")
+            await interaction.channel.send(f"Unfortunately you do not exist in our systems")
         except:
+            await interaction.channel.send(f"A weird error occured please contact your discord admin")
             print(self)
             print(self.member_id)
             print(self.date)
@@ -155,7 +158,9 @@ class GymButtonNo(discord.ui.Button):
             await interaction.channel.send(f"Recorded as No for {formatedDate}")
         except models.Model.DoesNotExist:
             print("Member Does not exist")
+            await interaction.channel.send(f"Unfortunately you do not exist in our systems")
         except:
+            await interaction.channel.send(f"A weird error occured please contact your discord admin")
             print(self)
             print(self.member_id)
             print(self.date)
@@ -174,8 +179,8 @@ class GymView(discord.ui.View):
         self.add_item(GymButtonNo(member_id=member_id, date=date))
         self.add_item(GymButtonYes(member_id=member_id, date=date))
 
-async def sendGymMessage(user_dm:discord.DMChannel, date:datetime.date):
-    await user_dm.send(content="Exercise checkin, did you do exercise today?", view=GymView(member_id=user_dm.recipient.id, date=date))
+async def sendGymMessage(user_dm:discord.DMChannel, date:datetime.date, format:str="%d-%m-%Y"):
+    await user_dm.send(content=f"Exercise checkin for {date.strftime(format)}, did you do exercise today?", view=GymView(member_id=user_dm.recipient.id, date=date))
      
 
 async def handleDailyGym(client: discord.Client):
@@ -204,7 +209,8 @@ async def handleDailyGym(client: discord.Client):
                     print("Already sent message")
                     print(user.global_name)
                 else:
-                    await sendGymMessage(user_dm=user_dm, date=memberTime.date())
+                    timeFormat = await getFormat(member["member_id"])
+                    await sendGymMessage(user_dm=user_dm, date=memberTime.date(), format=timeFormat)
                     await setMemberDate(member["member_id"], memberTime.date())
 
        
