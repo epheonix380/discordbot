@@ -2,7 +2,7 @@ import datetime
 import discord
 from django.db import models
 from storage.models import Member, MemberGymDay
-from storage.serializers import MemberSerializer
+from storage.serializers import MemberSerializer, MemberGymDaySerializer
 from helpers.timeStrore import getDefaultTimezone, getFormat
 from helpers.timeUtils import getTimeFromString
 import pytz
@@ -60,6 +60,13 @@ def getMembersHelper():
     return data
 
 @sync_to_async
+def getGymObjectsHelper(member_id:str):
+    qs = MemberGymDay.objects.filter(member_id__member_id=member_id, date__gte=datetime.date(year=2023, month=6, day=10))
+    data = MemberGymDaySerializer(qs, many=True).data
+    return data
+
+
+@sync_to_async
 def getIsMemberCheckedIn(uid, date:datetime.date):
     qs = MemberGymDay.objects.filter(member__member_id=uid, date=date)
     if qs.count() == 0:
@@ -110,6 +117,8 @@ async def handleGym(message:discord.Message, client:discord.Client):
                 await sendGymMessage(user_dm=user_dm, date=memberTime.date(), format=timeFormat)
         elif instructions[1] == "register":
             await handleGymOptIn(message=message)
+        elif instructions[1] == "status":
+            await handleGymStatus(message=message)
     else:
         await message.channel.send("Specifier required")
     await message.delete()
@@ -182,7 +191,33 @@ class GymView(discord.ui.View):
 
 async def sendGymMessage(user_dm:discord.DMChannel, date:datetime.date, format:str="%d-%m-%Y"):
     await user_dm.send(content=f"Exercise checkin for {date.strftime(format)}, did you do exercise today?", view=GymView(member_id=user_dm.recipient.id, date=date))
-     
+
+async def handleGymStatus(message:discord.Message):
+    data = await getGymObjectsHelper(member_id=message.author.id)
+    gymCount = 0
+    total = len(data)
+    weeks = [0]
+    currentWeekCount = 0
+    for day in data:
+        date = datetime.datetime.strptime(day["date"],"%Y-%m-%d").date()
+        if date.isoweekday() == 1:
+            currentWeekCount = currentWeekCount + 1
+            weeks.append(0) 
+        if day["isGym"]:
+            gymCount = gymCount + 1
+            weeks[currentWeekCount] = weeks[currentWeekCount] + 1
+    weekProgress = 0
+    totalOwed = 0
+    for week in weeks:
+        if week >= 4:
+            weekProgress = weekProgress + 1
+        else:
+            totalOwed = totalOwed + 4-week
+    if len(weeks) == 0 or total == 0:
+        await message.channel.send("You need to log your activity for at least 1 day for status to be available. Log it using ,gym checkin")
+    else:
+        await message.channel.send(f"You have done exercise for {gymCount} out of {total} days. Thats {(gymCount*100)/total}%!\nYou have done 4 or more days of training in {weekProgress} out of {len(weeks)} weeks, thats {(weekProgress*100)/len(weeks)}%!\nThat means you only owe ${totalOwed*10} to the Japan trip fund.")
+
 
 async def handleDailyGym(client: discord.Client):
     members = await getMembersHelper()
