@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Member, MemberTimeZoneMap, TimeZone, Item, GuildActivity, MemberGuildActivity, WeightedGuildActivity
+from .models import Member,MemberReminder, MemberTimeZoneMap, TimeZone, Item, GuildActivity, MemberGuildActivity, WeightedGuildActivity
 
 class ItemSerializer(serializers.ModelSerializer):
     class Meta:
@@ -39,8 +39,17 @@ class WeightedGuildActivitySerializer(serializers.ModelSerializer):
     class Meta:
         model = WeightedGuildActivity
         fields = ['dateTime','channel_id','startingMessage']
-
+        
 class MemberSerializer(serializers.ModelSerializer):
+    time_zone= serializers.SlugRelatedField(slug_field="time_zone", read_only=True)
     class Meta:
         model=Member
-        fields = ['member_id',"isGym", "gymCheckinTime", "lastGymCheckinDate"]
+        fields = ['member_id',"isGym", "gymCheckinTime", "lastGymCheckinDate","time_zone"]
+
+class MemberReminderSerializer(serializers.ModelSerializer):
+    member = MemberSerializer(read_only=True)
+    time = serializers.DateTimeField
+    frequency = serializers.DurationField
+    class Meta:
+        model=MemberReminder
+        fields = ["id",'member',"reminder_text", "time", "frequency","isComplete"]
