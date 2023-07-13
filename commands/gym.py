@@ -61,7 +61,7 @@ def getMembersHelper():
 
 @sync_to_async
 def getGymObjectsHelper(member_id:str):
-    qs = MemberGymDay.objects.filter(member_id__member_id=member_id, date__gte=datetime.date(year=2023, month=6, day=10)).order_by("date")
+    qs = MemberGymDay.objects.filter(member_id__member_id=member_id, date__gte=datetime.date(year=2023, month=7, day=10)).order_by("date")
     data = MemberGymDaySerializer(qs, many=True).data
     return data
 
@@ -195,7 +195,7 @@ async def sendGymMessage(user_dm:discord.DMChannel, date:datetime.date, format:s
 async def handleGymStatus(message:discord.Message):
     data = await getGymObjectsHelper(member_id=message.author.id)
     gymCount = 0
-    total = len(data)
+    total = 0
     weeks = [0]
     currentWeekCount = 0
     dates = []
@@ -204,6 +204,7 @@ async def handleGymStatus(message:discord.Message):
         if date in dates:
             pass
         dates.append(date.isoformat())
+        total = total + 1
         if date.isoweekday() == 1:
             currentWeekCount = currentWeekCount + 1
             weeks.append(0) 
