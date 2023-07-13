@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Member,MemberReminder, MemberTimeZoneMap, TimeZone, Item, GuildActivity, MemberGuildActivity, WeightedGuildActivity
+from .models import Member,MemberGymDay,MemberReminder, MemberTimeZoneMap, TimeZone, Item, GuildActivity, MemberGuildActivity, WeightedGuildActivity
 
 class ItemSerializer(serializers.ModelSerializer):
     class Meta:
@@ -53,3 +53,10 @@ class MemberReminderSerializer(serializers.ModelSerializer):
     class Meta:
         model=MemberReminder
         fields = ["id",'member',"reminder_text", "time", "frequency","isComplete"]
+
+class MemberGymDaySerializer(serializers.ModelSerializer):
+    member = MemberSerializer(read_only=True)
+    date = serializers.DateField(read_only=True)
+    class Meta:
+        model=MemberGymDay
+        fields = ["member","date","isGym"]
