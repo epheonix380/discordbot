@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Member, MemberTimeZoneMap, TimeZone, Item, GuildActivity, MemberGuildActivity, WeightedGuildActivity
+from .models import Member,MemberGymDay, MemberTimeZoneMap, TimeZone, Item, GuildActivity, MemberGuildActivity, WeightedGuildActivity
 
 class ItemSerializer(serializers.ModelSerializer):
     class Meta:
@@ -44,3 +44,10 @@ class MemberSerializer(serializers.ModelSerializer):
     class Meta:
         model=Member
         fields = ['member_id',"isGym", "gymCheckinTime", "lastGymCheckinDate"]
+
+class MemberGymDaySerializer(serializers.ModelSerializer):
+    member = MemberSerializer(read_only=True)
+    date = serializers.DateField(read_only=True)
+    class Meta:
+        model=MemberGymDay
+        fields = ["member","date","isGym"]
