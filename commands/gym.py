@@ -205,6 +205,7 @@ async def handleGymStatus(message:discord.Message):
             pass
         dates.append(date.isoformat())
         total = total + 1
+        print(date)
         if date.isoweekday() == 1:
             currentWeekCount = currentWeekCount + 1
             weeks.append(0) 
@@ -217,7 +218,7 @@ async def handleGymStatus(message:discord.Message):
         if week >= 4:
             weekProgress = weekProgress + 1
         else:
-            totalOwed = totalOwed + 4-week
+            totalOwed = totalOwed + 1
     if len(weeks) == 0 or total == 0:
         await message.channel.send("You need to log your activity for at least 1 day for status to be available. Log it using ,gym checkin")
     else:
