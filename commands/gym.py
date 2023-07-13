@@ -203,6 +203,7 @@ async def handleGymStatus(message:discord.Message):
         date = datetime.datetime.strptime(day["date"],"%Y-%m-%d").date()
         if date in dates:
             pass
+        dates.append(date.isoformat())
         if date.isoweekday() == 1:
             currentWeekCount = currentWeekCount + 1
             weeks.append(0) 
