@@ -219,16 +219,32 @@ async def handleGymStatus(message:discord.Message):
     difference = datetime.datetime(year=2023, month=7, day=10).date() - latestDate
     total = difference.days
     i=0
+    isThisWeekComplete = False
+    howManyLeft = 0
     for week in weeks:
         if i<len(weeks)-1:
             if week >= 4:
                 weekProgress = weekProgress + 1
             else:
                 totalOwed = totalOwed + 1
+        else:
+            if week>=4:
+                isThisWeekComplete = True
+            else:
+                howManyLeft = 4-week
+
     if len(weeks)-1 > 0 and total > 0:
         await message.channel.send(f"You have done exercise for {gymCount} out of {total} days. Thats {(gymCount*100)/total}%!\nYou have done 4 or more days of training in {weekProgress} out of {len(weeks)-1} weeks, thats {(weekProgress*100)/(len(weeks)-1)}%!\nThat means you only owe ${totalOwed*10} to the Japan trip fund.")
+        if isThisWeekComplete:
+            await message.channel.send(f"You have completed the goal of 4 sessions per week this week, congrats!")
+        else:
+            await message.channel.send(f"Looks like you need to exercise {howManyLeft} more times this week")
     elif total > 0:
         await message.channel.send(f"You have done exercise for {gymCount} out of {total} days. Thats {(gymCount*100)/total}%!\nThat means you only owe ${totalOwed*10} to the Japan trip fund.")
+        if isThisWeekComplete:
+            await message.channel.send(f"You have completed the goal of 4 sessions per week this week, congrats!")
+        else:
+            await message.channel.send(f"Looks like you need to exercise {howManyLeft} more times this week")
     else:
         await message.channel.send("You need to log your activity for at least 1 day for status to be available. Log it using ,gym checkin")
 
