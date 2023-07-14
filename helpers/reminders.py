@@ -1,6 +1,7 @@
 import discord
 import datetime
 import pytz
+import time as TIME
 from asgiref.sync import sync_to_async
 from storage.models import Member, MemberReminder
 from storage.serializers import MemberReminderSerializer
@@ -24,15 +25,17 @@ def updateReminder(id:str, newTime:datetime.datetime, tzTime:datetime.datetime):
 async def handleReminderCheck(client:discord.Client):
     reminders = await getMembersHelper()
     currentTime = datetime.datetime.now(tz=datetime.timezone.utc)
-
+    TIME.sleep(0)
     for reminder in reminders:
+        TIME.sleep(0)
+
         time = datetime.datetime.strptime((reminder["time"]), "%Y-%m-%dT%H:%M:%S.%fZ")
         if (reminder["frequency"][2:3] == ":"):
             freq = datetime.datetime.strptime(reminder["frequency"], '%H:%M:%S')
-            frequency = datetime.timedelta(days=freq.day, hours=freq.hour, minutes=freq.minute, seconds=freq.second)
+            frequency = datetime.timedelta(hours=freq.hour, minutes=freq.minute, seconds=freq.second)
         else:  
             freq = datetime.datetime.strptime(reminder["frequency"][-8:-1:], '%H:%M:%S')
-            freq1 = datetime.timedelta(days=freq.day, hours=freq.hour, minutes=freq.minute, seconds=freq.second)
+            freq1 = datetime.timedelta(hours=freq.hour, minutes=freq.minute, seconds=freq.second)
             freq2 = datetime.timedelta(days=int(reminder["frequency"][:-9:]))
             frequency = freq1 + freq2
         member = reminder["member"]

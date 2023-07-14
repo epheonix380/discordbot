@@ -52,7 +52,7 @@ class MemberReminderSerializer(serializers.ModelSerializer):
     frequency = serializers.DurationField
     class Meta:
         model=MemberReminder
-        fields = ["id",'member',"reminder_text", "time", "frequency","isComplete"]
+        fields = ["id",'member',"reminder_text", "time", "frequency","isComplete", "target"]
 
 class MemberGymDaySerializer(serializers.ModelSerializer):
     member = MemberSerializer(read_only=True)

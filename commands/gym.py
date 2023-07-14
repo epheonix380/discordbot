@@ -6,6 +6,7 @@ from storage.serializers import MemberSerializer, MemberGymDaySerializer
 from helpers.timeStrore import getDefaultTimezone, getFormat
 from helpers.timeUtils import getTimeFromString
 import pytz
+import time
 from asgiref.sync import sync_to_async
 
 @sync_to_async
@@ -252,7 +253,9 @@ async def handleGymStatus(message:discord.Message):
 
 async def handleDailyGym(client: discord.Client):
     members = await getMembersHelper()
+    time.sleep(0)
     for member in members:
+        time.sleep(0)
         defaultTimezone = await getDefaultTimezone(str(member["member_id"]))
         if defaultTimezone is None:
             defaultTimezone = datetime.timezone.utc

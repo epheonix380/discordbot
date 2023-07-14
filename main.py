@@ -97,7 +97,7 @@ async def on_message(message: discord.Message):
     elif message.content.startswith(",gym"):
         await handleGym(message=message,client=client)
     elif message.content.startswith(",best"):
-        await addReminder(member_id=message.author.id,reminder_text="Test reminder", time=datetime.now(tz=pytz.timezone("America/Vancouver")), frequency=timedelta(days=100, weeks=100, hours=100, seconds=100, minutes=100))
+        await addReminder(member_id=message.author.id,reminder_text="Test reminder", time=datetime.now(tz=pytz.timezone("America/Vancouver")), frequency=timedelta(minutes=5))
     elif message.content.startswith(",test") and (str(message.author.id)) == "218174413604913152":
         await handleReminderCheck(client=client)
     await addGuildActivity(message.guild.id, message, is_nsfw)
@@ -124,11 +124,12 @@ async def on_ready():
 
 async def tick():
     await handleDailyGym(client=client)
+    time.sleep(0)
     await handleReminderCheck(client=client)
 
 
 scheduler = AsyncIOScheduler()
-scheduler.add_job(tick, 'interval', minutes=5)
+scheduler.add_job(tick, 'interval', minutes=1)
 scheduler.start()
 loop = asyncio.get_event_loop()
 loop.create_task(client.start(TOKEN))
