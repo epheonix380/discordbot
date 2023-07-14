@@ -215,8 +215,9 @@ async def handleGymStatus(message:discord.Message):
             weeks[currentWeekCount] = weeks[currentWeekCount] + 1
     weekProgress = 0
     totalOwed = 0
-    difference = datetime.datetime(year=2023, month=7, day=10).date() - latestDate
+    difference = datetime.datetime.now().date() - datetime.datetime(year=2023, month=7, day=10).date()
     total = difference.days
+    print(total)
     i=0
     isThisWeekComplete = False
     howManyLeft = 0
