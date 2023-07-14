@@ -195,7 +195,7 @@ async def sendGymMessage(user_dm:discord.DMChannel, date:datetime.date, format:s
 async def handleGymStatus(message:discord.Message):
     data = await getGymObjectsHelper(member_id=message.author.id)
     gymCount = 0
-    total = 0
+    latestDate = datetime.datetime(year=2023, month=7, day=10).date()
     weeks = []
     currentWeekCount = -1
     dates = []
@@ -203,6 +203,8 @@ async def handleGymStatus(message:discord.Message):
         date = datetime.datetime.strptime(day["date"],"%Y-%m-%d").date()
         if date in dates:
             pass
+        if date > latestDate:
+            latestDate = date
         dates.append(date.isoformat())
         total = total + 1
         print(date)
@@ -214,6 +216,8 @@ async def handleGymStatus(message:discord.Message):
             weeks[currentWeekCount] = weeks[currentWeekCount] + 1
     weekProgress = 0
     totalOwed = 0
+    difference = datetime.datetime(year=2023, month=7, day=10).date() - latestDate
+    total = difference.days
     i=0
     for week in weeks:
         if i<len(weeks)-1:
