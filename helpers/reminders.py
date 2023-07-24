@@ -58,17 +58,40 @@ def addReminder(member_id:str,reminder_text:str, time:datetime.datetime, frequen
     reminder.save()
 
 def checkRegex(regex):
-    return regex is not None and len(regex) > 0
+    return regex is not None
 
-
-async def addReminder(message:discord.Message):
-    inRegex = re.findall("(?<=(\sin\s))[\w\W]+?(?=$|(to)|(repeat after))",message.content)
-    onRegex = re.findall("(?<=(\son\s))[\w\W]+?(?=$|(to)|(repeat after))",message.content)
-    atRegex = re.findall("(?<=(\sat\s))[\w\W]+?(?=$|(to)|(repeat after))",message.content)
+async def handleReminderAdd(message:discord.Message):
+    inRegex = re.search("(?<=(\sin\s))[\w\W]+?(?=$|(to)|(repeat after))",message.content)
+    onRegex = re.search("(?<=(\son\s))[\w\W]+?(?=$|(to)|(repeat after))",message.content)
+    atRegex = re.search("(?<=(\sat\s))[\w\W]+?(?=$|(to)|(repeat after))",message.content)
+    toRegex = re.search("(?<=(\sto\s))[\w\W]+?(?=$|(in)|(at)|(on)|(repeat after))",message.content)
+    to = ""
+    if checkRegex(toRegex):
+        to = toRegex.group(0)
     amount = 0 + 1 if checkRegex(inRegex) else 0 + 1 if checkRegex(onRegex) else 0 + 1 if checkRegex(atRegex) else 0
     if amount == 1:
-        message.channel.send("Hi")
+        days = 0
+        hours = 0
+        minutes = 0
+        if checkRegex(inRegex):
+            inGroup = inRegex.group(0)
+            daysRegex = re.search("[\d]+?(?=\s+?((days)|(day)))",inGroup)
+            hourRegex = re.search("[\d]+?(?=\s+?((hours)|(hour)|(hrs)|(hr)|(h)))",inGroup)
+            minuteRegex = re.search("[\d]+?(?=\s+?((mins)|(minutes)))",inGroup)
+            if checkRegex(daysRegex):
+                days = daysRegex.group(0)
+            if checkRegex(hourRegex):
+                hours = hourRegex.group(0)
+            if checkRegex(minuteRegex):
+                minutes = minuteRegex.group(0)
+            now = datetime.datetime.now()
+            await addReminder(member_id=message.author.id, reminder_text=to, time=now, frequency=datetime.timedelta(days=days, hours=hours, minutes=minutes))
+        elif checkRegex(onRegex):
+            print(onRegex.group(0))
+        elif checkRegex(atRegex):
+            print(atRegex.group(0))
+        await message.channel.send("Hi")
     elif amount > 1:
-        message.channel.send("Too many identifiers")
+        await message.channel.send("Too many identifiers")
     else:
-        message.channel.send("Too little identifiers")
+        await message.channel.send("Too little identifiers")

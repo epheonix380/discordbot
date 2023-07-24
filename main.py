@@ -37,7 +37,7 @@ from commands.activity import handleActivity
 from commands.help import helpHandler
 from commands.summary import handleSummary
 from commands.gym import handleDailyGym, handleGymOptIn, sendGymMessage, handleGym
-from helpers.reminders import handleReminderCheck, addReminder
+from helpers.reminders import handleReminderCheck, addReminder,handleReminderAdd
 
 @client.event
 async def on_ready():
@@ -97,7 +97,7 @@ async def on_message(message: discord.Message):
     elif message.content.startswith(",gym"):
         await handleGym(message=message,client=client)
     elif message.content.startswith(",best"):
-        await addReminder(member_id=message.author.id,reminder_text="Test reminder", time=datetime.now(tz=pytz.timezone("America/Vancouver")), frequency=timedelta(minutes=5))
+        await handleReminderAdd(message=message)
     elif message.content.startswith(",test") and (str(message.author.id)) == "218174413604913152":
         await handleReminderCheck(client=client)
     await addGuildActivity(message.guild.id, message, is_nsfw)
