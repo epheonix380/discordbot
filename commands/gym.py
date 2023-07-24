@@ -232,6 +232,7 @@ async def handleGymStatus(message:discord.Message):
                 isThisWeekComplete = True
             else:
                 howManyLeft = 4-week
+        i = i + 1
 
     if len(weeks)-1 > 0 and total > 0:
         await message.channel.send(f"You have done exercise for {gymCount} out of {total} days. Thats {(gymCount*100)/total}%!\nYou have done 4 or more days of training in {weekProgress} out of {len(weeks)-1} weeks, thats {(weekProgress*100)/(len(weeks)-1)}%!\nThat means you only owe ${totalOwed*10} to the Japan trip fund.")
