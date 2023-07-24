@@ -86,6 +86,7 @@ async def handleReminderAdd(message:discord.Message):
                 minutes = minuteRegex.group(0)
             now = datetime.datetime.now()
             await addReminder(member_id=message.author.id, reminder_text=to, time=now, frequency=datetime.timedelta(days=days, hours=hours, minutes=minutes))
+            await message.channel.send("Added reminder")
         elif checkRegex(onRegex):
             print(onRegex.group(0))
         elif checkRegex(atRegex):
