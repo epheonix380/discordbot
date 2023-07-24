@@ -200,6 +200,7 @@ async def handleGymStatus(message:discord.Message):
     weeks = []
     currentWeekCount = -1
     dates = []
+    i=0
     for day in data:
         date = datetime.datetime.strptime(day["date"],"%Y-%m-%d").date()
         if date in dates:
@@ -210,10 +211,14 @@ async def handleGymStatus(message:discord.Message):
         print(date)
         if date.isoweekday() == 1:
             currentWeekCount = currentWeekCount + 1
-            weeks.append(0) 
+            weeks.append(0)
+        elif i==0:
+            currentWeekCount = 0
+            weeks.append(0)
         if day["isGym"]:
             gymCount = gymCount + 1
             weeks[currentWeekCount] = weeks[currentWeekCount] + 1
+        i = i + 1
     weekProgress = 0
     totalOwed = 0
     difference = datetime.datetime.now().date() - datetime.datetime(year=2023, month=7, day=10).date()
