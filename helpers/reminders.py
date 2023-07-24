@@ -1,5 +1,6 @@
 import discord
 import datetime
+import re
 import pytz
 import time as TIME
 from asgiref.sync import sync_to_async
@@ -55,3 +56,19 @@ def addReminder(member_id:str,reminder_text:str, time:datetime.datetime, frequen
     print(time)
     reminder = MemberReminder(member=member, reminder_text=reminder_text, time=time, frequency=frequency, isComplete=isComplete)
     reminder.save()
+
+def checkRegex(regex):
+    return regex is not None and len(regex) > 0
+
+
+async def addReminder(message:discord.Message):
+    inRegex = re.findall("(?<=(\sin\s))[\w\W]+?(?=$|(to)|(repeat after))",message.content)
+    onRegex = re.findall("(?<=(\son\s))[\w\W]+?(?=$|(to)|(repeat after))",message.content)
+    atRegex = re.findall("(?<=(\sat\s))[\w\W]+?(?=$|(to)|(repeat after))",message.content)
+    amount = 0 + 1 if checkRegex(inRegex) else 0 + 1 if checkRegex(onRegex) else 0 + 1 if checkRegex(atRegex) else 0
+    if amount == 1:
+        message.channel.send("Hi")
+    elif amount > 1:
+        message.channel.send("Too many identifiers")
+    else:
+        message.channel.send("Too little identifiers")
