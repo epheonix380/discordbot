@@ -1,7 +1,8 @@
 import discord
 from threading import Thread
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import time
+import pytz
 import asyncio
 from asgiref.sync import async_to_sync
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -36,6 +37,7 @@ from commands.activity import handleActivity
 from commands.help import helpHandler
 from commands.summary import handleSummary
 from commands.gym import handleDailyGym, handleGymOptIn, sendGymMessage, handleGym
+from helpers.reminders import handleReminderCheck, addReminder,handleReminderAdd
 
 @client.event
 async def on_ready():
@@ -94,8 +96,10 @@ async def on_message(message: discord.Message):
         await handleGymOptIn(message=message)
     elif message.content.startswith(",gym"):
         await handleGym(message=message,client=client)
+    elif message.content.startswith(",best"):
+        await handleReminderAdd(message=message)
     elif message.content.startswith(",test") and (str(message.author.id)) == "218174413604913152":
-        await handleDailyGym(client=client)
+        await handleReminderCheck(client=client)
     await addGuildActivity(message.guild.id, message, is_nsfw)
 
 @tree.command(name="test",description="This is a test command", guild=None)
@@ -120,10 +124,12 @@ async def on_ready():
 
 async def tick():
     await handleDailyGym(client=client)
+    time.sleep(0)
+    await handleReminderCheck(client=client)
 
-    
+
 scheduler = AsyncIOScheduler()
-scheduler.add_job(tick, 'interval', minutes=5)
+scheduler.add_job(tick, 'interval', minutes=1)
 scheduler.start()
 loop = asyncio.get_event_loop()
 loop.create_task(client.start(TOKEN))

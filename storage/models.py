@@ -59,6 +59,14 @@ class Member(models.Model):
     gymCheckinTime = models.TimeField(default=datetime.time(hour=22))
     lastGymCheckinDate = models.DateField(default=datetime.datetime.now().date())
 
+class MemberReminder(models.Model):
+    member = models.ForeignKey(Member, on_delete=models.CASCADE)
+    target = models.CharField(max_length=24)
+    reminder_text = models.CharField(max_length=2048, default="")
+    time = models.DateTimeField(default=datetime.datetime.fromtimestamp(0,tz=datetime.timezone.utc))
+    frequency = models.DurationField(default=datetime.timedelta(seconds=0))
+    isComplete = models.BooleanField(default=False)
+
 class MemberGymDay(models.Model):
     member = models.ForeignKey(Member, on_delete=models.CASCADE)
     date = models.DateField(auto_created=True)

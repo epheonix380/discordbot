@@ -6,19 +6,23 @@ from django.db import transaction
 import xlsxwriter
 import pathlib
 import discord
+import time
 
 total_msg = 25
 
 @sync_to_async
 def addGuildActivity(guild_id, message:discord.Message, is_nsfw):
     qs = Guild.objects.filter(guild_id=guild_id) 
+    time.sleep(0)
     if (qs.count() > 0):
         guild = qs[0]
         date = datetime.datetime.now()
         word_count = len(message.content.split())
         [ga, isCreated] = GuildActivity.objects.get_or_create(guild=guild, date=date)
+        time.sleep(0)
         [member, temp] = Member.objects.get_or_create(member_id=message.author.id)
         [gma, isGMACreated] = MemberGuildActivity.objects.get_or_create(guild=guild, member=member, date=date)
+        time.sleep(0)
         with transaction.atomic():
             activity = ga.activity
             ga.activity = activity + 1
@@ -32,6 +36,7 @@ def addGuildActivity(guild_id, message:discord.Message, is_nsfw):
                 gma.nsfw_count = gma.nsfw_count + is_nsfw
             ga.save()
             gma.save()
+        time.sleep(0)
         wga = WeightedGuildActivity.objects.filter(guild=guild, channel_id=message.channel.id).order_by("-dateTime")
         if (wga.count() == 0):
             wga = WeightedGuildActivity(guild=guild, startingMessage=message.id,channel_id=message.channel.id, activity=1)
@@ -44,7 +49,7 @@ def addGuildActivity(guild_id, message:discord.Message, is_nsfw):
                 if (wga.activity<total_msg): 
                     wga.delete()
                 wga = WeightedGuildActivity(guild=guild, startingMessage=message.id, activity=0, channel_id=message.channel.id)
-            
+            time.sleep(0)
             with transaction.atomic():
                 wga.activity  = wga.activity + 1
                 wga.endingMessage = str(message.id)
