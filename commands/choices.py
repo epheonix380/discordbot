@@ -25,7 +25,8 @@ async def choices(message: discord.Message, client:discord.Client):
             choicesString = ', '.join(choices)
             content = f"Choosing from these options:\n{choicesString}\nChose:\n{choice}"
             await message.channel.send(content)
-        await message.channel.send("List is only 1 long, cannot remove anymore items")
+        else:
+            await message.channel.send("List is only 1 long, cannot remove anymore items")
     elif len(message.content) <= 9:
         choices = await getRecentChoice(uid=message.author.id)
         choice = random.choice(choices)
