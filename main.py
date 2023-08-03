@@ -109,7 +109,6 @@ async def vc_auto_complete(interaction: discord.Interaction, current: str) -> Li
     guild = client.get_guild(interaction.guild_id)
     try:
         with open(f'{guild.id}.json', 'r') as openfile:
-            print(openfile)
             channels = json.load(openfile)
     except:
         guildChannels = await guild.fetch_channels()
