@@ -36,6 +36,7 @@ async def helpHandler(message:discord.Message):
             ```,time default <city name>``` sets your default timezone to city name
             ```,gym checkin``` manually checkin, this is incase you want to do it earlier in  the  day or if the bot has not sent the message for some reason
             ```,gym register``` register for the exercise challenge!
+            ```,gym status``` gives you the current stats for your gymming sessions and how much youu owe
             """)
     else:
         await message.channel.send("""
@@ -45,7 +46,7 @@ async def helpHandler(message:discord.Message):
         ,nsfw\n
         TIME: Time related command do ,help time for more info
         ,time\n
-        CHOOSE: Let the bot randomoly decide between a few options, seperate options with commas
+        CHOOSE: Let the bot randomoly decide between a few options, seperate options with commas, reply to a choose message to narrow down the options
         ,choose\n
         ADMIN: Admin commands that help with Guess The Hero and NSFW Channels do ,help admin for more details
         ,admin\n
@@ -53,5 +54,7 @@ async def helpHandler(message:discord.Message):
         ,activity\n
         Exercise Logging: These commands help log your daily exercise for the challenge! Use ,help gym for more info
         ,gym\n
+        Pinging voice channels: These commands help you ping all the members of a specific voice channel, please note this is a discord command
+        /ping\n
         """)
     await message.delete()
