@@ -13,6 +13,9 @@ import os
 import re
 from automod.nsfw import handle_nsfw, handel_regex_nsfw
 from backend import brocken as notSettings
+from typing import List
+import json
+
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
@@ -51,7 +54,7 @@ async def on_message(message: discord.Message):
         elif message.content.startswith(",help") or message.content.startswith("help"):
             await helpHandler(message=message)
         elif message.content.startswith(",choose") or message.content.startswith("choose"):
-            await choices(message=message)
+            await choices(message=message, client=client)
         elif message.content.startswith(",choices") or message.content.startswith("choices"):
             await saveChoices(message=message)
         elif message.content.startswith(",gymOptIn") or message.content.startswith("gymOptIn"):
@@ -85,7 +88,7 @@ async def on_message(message: discord.Message):
     elif message.content.startswith(",admin"):
         await admin(message=message)
     elif message.content.startswith(",choose"):
-        await choices(message=message)
+        await choices(message=message, client=client)
     elif message.content.startswith(",choices"):
         await saveChoices(message=message)
     elif message.content.startswith(",activity"):
@@ -102,6 +105,31 @@ async def on_message(message: discord.Message):
         await handleReminderCheck(client=client)
     await addGuildActivity(message.guild.id, message, is_nsfw)
 
+async def vc_auto_complete(interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
+    guild = client.get_guild(interaction.guild_id)
+    try:
+        with open(f'{guild.id}.json', 'r') as openfile:
+            channels = json.load(openfile)
+    except:
+        guildChannels = await guild.fetch_channels()
+        channels = [
+            {"name":channel.name, "type":channel.type[0], "value":channel.id} for channel in guildChannels if channel.type == discord.ChannelType.voice
+        ]
+        jsonString = json.dumps(channels)
+        with open(f'{guild.id}.json', "w") as outfile:
+            outfile.write(jsonString)
+            outfile.close()
+    choices = [discord.app_commands.Choice(name=choice["name"], value=str(choice["value"])) for choice in channels if current.lower() in choice["name"].lower()][:25]
+    return choices
+
+async def pingVoiceChannel(interaction:discord.Interaction, vc:str):
+    channel:discord.VoiceChannel = await client.fetch_channel(vc)
+    members = channel.members
+    content = f"Voice channel {channel.name} has been pinged by <@{interaction.user.id}>\n"
+    for member in members:
+        content += f"<@{member.id}>"
+    await interaction.channel.send(content=content)
+
 @tree.command(name="test",description="This is a test command", guild=None)
 async def first_commant(interaction: discord.Interaction):
     await interaction.response.send_message("Test")
@@ -110,6 +138,11 @@ async def first_commant(interaction: discord.Interaction):
 @app_commands.autocomplete(hero=auto_complete)
 async def first_commant(interaction: discord.Interaction,hero:str):
     await saveHeroName(interaction=interaction, hero=hero)
+
+@tree.command(name="ping",description="Ping all the members of a voice channel", guild=None)
+@app_commands.autocomplete(vc=vc_auto_complete)
+async def ping_command(interaction: discord.Interaction,vc:str):
+    await pingVoiceChannel(interaction=interaction, vc=vc)
 
 @tree.command(name="guess",description="Guess a hero for guess the hero", guild=None)
 @app_commands.autocomplete(hero=auto_complete)

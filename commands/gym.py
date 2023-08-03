@@ -127,7 +127,7 @@ async def handleGym(message:discord.Message, client:discord.Client):
 
 class GymButtonYes(discord.ui.Button):
     def __init__(self, member_id:str, date:datetime.date):
-        super().__init__(style=discord.ButtonStyle.success, row=0)
+        super().__init__(style=discord.ButtonStyle.success, row=0, timeout=None)
         self.member_id = member_id
         self.date = date
         self.label = "Yes"
@@ -152,7 +152,7 @@ class GymButtonYes(discord.ui.Button):
 
 class GymButtonNo(discord.ui.Button):
     def __init__(self, member_id:str, date:datetime.date):
-        super().__init__(style=discord.ButtonStyle.red, row=0)
+        super().__init__(style=discord.ButtonStyle.red, row=0, timeout=None)
         self.member_id = member_id
         self.date = date
         self.label = "No"
@@ -208,7 +208,6 @@ async def handleGymStatus(message:discord.Message):
         if date > latestDate:
             latestDate = date
         dates.append(date.isoformat())
-        print(date)
         if date.isoweekday() == 1:
             currentWeekCount = currentWeekCount + 1
             weeks.append(0)

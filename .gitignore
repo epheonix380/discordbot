@@ -4,3 +4,7 @@
 /temp
 /systemCache
 /target
+*.json
+*.gif
+*.jpg
+*.jpeg
