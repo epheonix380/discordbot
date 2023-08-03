@@ -127,7 +127,7 @@ async def handleGym(message:discord.Message, client:discord.Client):
 
 class GymButtonYes(discord.ui.Button):
     def __init__(self, member_id:str, date:datetime.date):
-        super().__init__(style=discord.ButtonStyle.success, row=0)
+        super().__init__(style=discord.ButtonStyle.success, row=0, timeout=None)
         self.member_id = member_id
         self.date = date
         self.label = "Yes"
@@ -152,7 +152,7 @@ class GymButtonYes(discord.ui.Button):
 
 class GymButtonNo(discord.ui.Button):
     def __init__(self, member_id:str, date:datetime.date):
-        super().__init__(style=discord.ButtonStyle.red, row=0)
+        super().__init__(style=discord.ButtonStyle.red, row=0, timeout=None)
         self.member_id = member_id
         self.date = date
         self.label = "No"
