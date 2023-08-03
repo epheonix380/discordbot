@@ -108,7 +108,7 @@ async def vc_auto_complete(interaction: discord.Interaction, current: str) -> Li
     guild = client.get_guild(interaction.guild_id)
     channels = await guild.fetch_channels()
     voice_channels = [c for c in channels if c.type==discord.ChannelType.voice]
-    choices = [discord.app_commands.Choice(name=choice.name, value=str(choice.id)) for choice in voice_channels ][:25]
+    choices = [discord.app_commands.Choice(name=choice.name, value=str(choice.id)) for choice in voice_channels if current.lower() in choice.name.lower()][:25]
     return choices
 
 async def pingVoiceChannel(interaction:discord.Interaction, vc:str):
