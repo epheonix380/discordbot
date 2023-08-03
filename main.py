@@ -13,6 +13,8 @@ import os
 import re
 from automod.nsfw import handle_nsfw, handel_regex_nsfw
 from backend import brocken as notSettings
+from typing import List
+
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
@@ -102,6 +104,21 @@ async def on_message(message: discord.Message):
         await handleReminderCheck(client=client)
     await addGuildActivity(message.guild.id, message, is_nsfw)
 
+async def vc_auto_complete(interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
+    guild = client.get_guild(interaction.guild_id)
+    channels = await guild.fetch_channels()
+    voice_channels = [c for c in channels if c.type==discord.ChannelType.voice]
+    choices = [discord.app_commands.Choice(name=choice.name, value=str(choice.id)) for choice in voice_channels ][:25]
+    return choices
+
+async def pingVoiceChannel(interaction:discord.Interaction, vc:str):
+    channel:discord.VoiceChannel = await client.fetch_channel(vc)
+    members = channel.members
+    content = f"Voice channel {channel.name} has been pinged by <@{interaction.user.id}>\n"
+    for member in members:
+        content += f"<@{member.id}>"
+    await interaction.channel.send(content=content)
+
 @tree.command(name="test",description="This is a test command", guild=None)
 async def first_commant(interaction: discord.Interaction):
     await interaction.response.send_message("Test")
@@ -110,6 +127,11 @@ async def first_commant(interaction: discord.Interaction):
 @app_commands.autocomplete(hero=auto_complete)
 async def first_commant(interaction: discord.Interaction,hero:str):
     await saveHeroName(interaction=interaction, hero=hero)
+
+@tree.command(name="ping",description="Ping all the members of a voice channel", guild=None)
+@app_commands.autocomplete(vc=vc_auto_complete)
+async def ping_command(interaction: discord.Interaction,vc:str):
+    await pingVoiceChannel(interaction=interaction, vc=vc)
 
 @tree.command(name="guess",description="Guess a hero for guess the hero", guild=None)
 @app_commands.autocomplete(hero=auto_complete)
