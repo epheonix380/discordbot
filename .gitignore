@@ -5,3 +5,6 @@
 /systemCache
 /target
 *.json
+*.gif
+*.jpg
+*.jpeg
