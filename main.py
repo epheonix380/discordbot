@@ -49,7 +49,7 @@ async def on_message(message: discord.Message):
         elif message.content.startswith(",help") or message.content.startswith("help"):
             await helpHandler(message=message)
         elif message.content.startswith(",choose") or message.content.startswith("choose"):
-            await choices(message=message)
+            await choices(message=message, client=client)
         elif message.content.startswith(",choices") or message.content.startswith("choices"):
             await saveChoices(message=message)
         elif message.content.startswith(",gymOptIn") or message.content.startswith("gymOptIn"):
@@ -83,7 +83,7 @@ async def on_message(message: discord.Message):
     elif message.content.startswith(",admin"):
         await admin(message=message)
     elif message.content.startswith(",choose"):
-        await choices(message=message)
+        await choices(message=message, client=client)
     elif message.content.startswith(",choices"):
         await saveChoices(message=message)
     elif message.content.startswith(",activity"):
