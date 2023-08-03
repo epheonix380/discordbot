@@ -107,15 +107,11 @@ async def on_message(message: discord.Message):
 
 async def vc_auto_complete(interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
     guild = client.get_guild(interaction.guild_id)
-    print(guild)
     try:
-        print("try")
-
         with open(f'{guild.id}.json', 'r') as openfile:
             print(openfile)
             channels = json.load(openfile)
     except:
-        print("Exception")
         guildChannels = await guild.fetch_channels()
         channels = [
             {"name":channel.name, "type":channel.type[0], "value":channel.id} for channel in guildChannels if channel.type == discord.ChannelType.voice
