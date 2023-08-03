@@ -14,6 +14,7 @@ import re
 from automod.nsfw import handle_nsfw, handel_regex_nsfw
 from backend import brocken as notSettings
 from typing import List
+import json
 
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
@@ -106,7 +107,13 @@ async def on_message(message: discord.Message):
 
 async def vc_auto_complete(interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
     guild = client.get_guild(interaction.guild_id)
-    channels = await guild.fetch_channels()
+    try:
+        with open(f'{guild.id}.json', 'r') as openfile:
+            channels = json.load(openfile)
+    except:
+        channels = await guild.fetch_channels()
+        with open(f'{guild.id}.json', "w") as outfile:
+            json.dump(channels, outfile)
     voice_channels = [c for c in channels if c.type==discord.ChannelType.voice]
     choices = [discord.app_commands.Choice(name=choice.name, value=str(choice.id)) for choice in voice_channels if current.lower() in choice.name.lower()][:25]
     return choices
