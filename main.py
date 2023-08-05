@@ -158,7 +158,7 @@ async def on_ready():
 async def tick():
     await handleDailyGym(client=client)
     time.sleep(0)
-    await handleReminderCheck(client=client)
+    # await handleReminderCheck(client=client)
 
 
 scheduler = AsyncIOScheduler()
