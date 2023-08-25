@@ -122,12 +122,13 @@ async def vc_auto_complete(interaction: discord.Interaction, current: str) -> Li
     choices = [discord.app_commands.Choice(name=choice["name"], value=str(choice["value"])) for choice in channels if current.lower() in choice["name"].lower()][:25]
     return choices
 
-async def pingVoiceChannel(interaction:discord.Interaction, vc:str):
+async def pingVoiceChannel(interaction:discord.Interaction, vc:str, message:str):
     channel:discord.VoiceChannel = await client.fetch_channel(vc)
     members = channel.members
     content = f"Voice channel {channel.name} has been pinged by <@{interaction.user.id}>\n\nPeople in the voice channel please heed my call:\n"
     for member in members:
         content += f"<@{member.id}>"
+    content += "\n" + message
     await interaction.channel.send(content=content)
 
 @tree.command(name="test",description="This is a test command", guild=None)
@@ -141,8 +142,8 @@ async def first_commant(interaction: discord.Interaction,hero:str):
 
 @tree.command(name="ping",description="Ping all the members of a voice channel", guild=None)
 @app_commands.autocomplete(vc=vc_auto_complete)
-async def ping_command(interaction: discord.Interaction,vc:str):
-    await pingVoiceChannel(interaction=interaction, vc=vc)
+async def ping_command(interaction: discord.Interaction,vc:str, message:str):
+    await pingVoiceChannel(interaction=interaction, vc=vc, message=message)
 
 @tree.command(name="guess",description="Guess a hero for guess the hero", guild=None)
 @app_commands.autocomplete(hero=auto_complete)
