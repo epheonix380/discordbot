@@ -125,7 +125,7 @@ async def vc_auto_complete(interaction: discord.Interaction, current: str) -> Li
 async def pingVoiceChannel(interaction:discord.Interaction, vc:str):
     channel:discord.VoiceChannel = await client.fetch_channel(vc)
     members = channel.members
-    content = f"Voice channel {channel.name} has been pinged by <@{interaction.user.id}>\n"
+    content = f"Voice channel {channel.name} has been pinged by <@{interaction.user.id}>\n\nPeople in the voice channel please heed my call:\n"
     for member in members:
         content += f"<@{member.id}>"
     await interaction.channel.send(content=content)
