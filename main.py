@@ -157,7 +157,7 @@ async def on_ready():
     print("Ready!")
 
 async def tick():
-    await handleDailyGym(client=client)
+    # await handleDailyGym(client=client)
     time.sleep(0)
     # await handleReminderCheck(client=client)
 

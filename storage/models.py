@@ -59,6 +59,30 @@ class Member(models.Model):
     gymCheckinTime = models.TimeField(default=datetime.time(hour=22))
     lastGymCheckinDate = models.DateField(default=datetime.datetime.now().date())
 
+class MemberPlaylist(models.Model):
+    member_id = models.ForeignKey(Member, on_delete=models.CASCADE)
+    playlist_id = models.CharField(max_length=24, primary_key=True)
+    on_repeat = models.BooleanField(default=False)
+
+class PlaylistElement(models.Model):
+
+    class SourceChoice(models.TextChoices):
+        YOUTUBE = "YOUTUBE"
+        SPOTIFY = "SPOTIFY"
+        SOUND_CLOUD = "SOUNDCLOUD"
+
+    playlist_id = models.ForeignKey(MemberPlaylist, on_delete=models.CASCADE)
+    is_playlist = models.BooleanField(default=False)
+    on_repeat = models.BooleanField(default=False)
+    title = models.CharField(max_length=64)
+    artist = models.CharField(max_length=64)
+    duration = models.DurationField()
+    song_id = models.CharField(max_length=24)
+    source = models.CharField(choices=SourceChoice.choices, max_length=32)
+    order = models.PositiveIntegerField()
+
+
+
 class MemberReminder(models.Model):
     member = models.ForeignKey(Member, on_delete=models.CASCADE)
     target = models.CharField(max_length=24)
