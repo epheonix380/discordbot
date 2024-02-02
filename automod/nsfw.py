@@ -1,8 +1,7 @@
-from nudenet.classifier import Classifier as NudeClassifier
 import discord
 import requests
 import re
-classifier = NudeClassifier()
+import opennsfw2 as n2
 
 async def handle_nsfw(message: discord.Message):
     trigger = True
@@ -16,8 +15,9 @@ async def handle_nsfw(message: discord.Message):
             img_data = requests.get(thing.url).content
             with open(f"SPOILER_{i}_{thing.filename}", "wb") as handler:
                 handler.write(img_data)
-                obj = classifier.classify(f"SPOILER_{i}_{thing.filename}")
-                if obj[f"SPOILER_{i}_{thing.filename}"]['safe']< 0.4 or (message.author.id == "226315767564599297" and obj[f"SPOILER_{i}_{thing.filename}"]['safe']< 0.75):
+                obj = n2.predict_image(f"SPOILER_{i}_{thing.filename}")
+                print(obj)
+                if obj> 0.5 or (message.author.id == "226315767564599297" and obj> 0.25):
                     nsfw_count = nsfw_count + 1
                     trigger = trigger and False
                     files.append(discord.File(f"SPOILER_{i}_{thing.filename}"))
@@ -34,8 +34,10 @@ async def handle_nsfw(message: discord.Message):
             img_data = requests.get(embed.url).content
             with open(f"SPOILER_{i}_{thing.filename}", "wb") as handler:
                 handler.write(img_data)
-                obj = classifier.classify(f"SPOILER_{i}_{thing.filename}")
-                if obj[f"SPOILER_{i}_{thing.filename}"]['safe']< 0.4 or (message.author.id == "226315767564599297" and obj[f"SPOILER_{i}_{thing.filename}"]['safe']< 0.75):
+                obj = n2.predict_image(f"SPOILER_{i}_{thing.filename}")
+                print(obj)
+
+                if obj> 0.5 or (message.author.id == "226315767564599297" and obj> 0.25):
                     nsfw_count = nsfw_count + 1
                     containsEmbeds = True
                     trigger = trigger and False
@@ -78,8 +80,10 @@ async def handel_regex_nsfw(message):
                 img_data = requests.get(str(match.group(0))).content
                 with open(f"SPOILER_{i}.png", "wb") as handler:
                     handler.write(img_data)
-                    obj = classifier.classify(f"SPOILER_{i}.png")
-                    if obj[f"SPOILER_{i}.png"]['safe']< 0.4 or (message.author.id == "226315767564599297" and obj[f"SPOILER_{i}.png"]['safe']< 0.75):
+                    obj = n2.predict_image(f"SPOILER_{i}.png")
+                    print(obj)
+
+                    if obj> 0.5 or (message.author.id == "226315767564599297" and obj> 0.25):
                         nsfw_count = nsfw_count + 1
                         containsEmbeds = True
                         trigger = trigger and False
