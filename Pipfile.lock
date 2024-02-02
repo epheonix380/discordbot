@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "b141101ffa10ab5aa3e0e0beba3314d4b19cc84234e8c202b2825d1401587998"
+            "sha256": "e684a9d50ee56588188dc089c14365445163ea0031def0487a2954fa93c01e63"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -591,7 +591,7 @@
                 "sha256:173557b4d33aad9f7dc75ce2ff963d8b313f36371e15da4b5ebb35ac6c7d5af6",
                 "sha256:3f595fcfd4b1bccd5cf73453f60984c5fa1c18eed499277a52b23337238c2670"
             ],
-            "markers": "python_version >= '3.8'",
+            "index": "pypi",
             "version": "==5.0.1"
         },
         "h5py": {
@@ -677,7 +677,7 @@
                 "sha256:579138e667d9c65d5e30df470175f2c6d39f95dc308c9d825957a875459939f9",
                 "sha256:ff2204792582e3889c51c77722cc6e8258dbb1ece7db192f5a9bcd1887cf3385"
             ],
-            "markers": "python_version >= '3.9'",
+            "index": "pypi",
             "version": "==3.0.4"
         },
         "kiwisolver": {
@@ -849,7 +849,7 @@
                 "sha256:deaed9ad4da0b1aea77fe0aa0cebb9ef611c70b3177be936a95e5d01fa05094f",
                 "sha256:ef8345b48e95cee45ff25192ed1f4857273117917a4dcd48e3905619bcd9c9b8"
             ],
-            "markers": "python_version >= '3.9'",
+            "index": "pypi",
             "version": "==3.8.2"
         },
         "mdurl": {
@@ -1017,7 +1017,7 @@
                 "sha256:f25e2811a9c932e43943a2615e65fc487a0b6b49218899e62e426e7f0a57eeda",
                 "sha256:f73497e8c38295aaa4741bdfa4fda1a5aedda5473074369eca10626835445511"
             ],
-            "markers": "python_version >= '3.9'",
+            "index": "pypi",
             "version": "==1.26.3"
         },
         "onnxruntime": {
@@ -1061,7 +1061,7 @@
                 "sha256:dcf000c36dd1651118a2462257e3a9e76db789a78432e1f303c7bac54f63ef6c",
                 "sha256:e4088cab82b66a3b37ffc452976b14a3c599269c247895ae9ceb4066d8188a57"
             ],
-            "markers": "python_version >= '3.6'",
+            "index": "pypi",
             "version": "==4.9.0.80"
         },
         "opencv-python-headless": {
@@ -1164,7 +1164,7 @@
                 "sha256:f379abd2f1e3dddb2b61bc67977a6b5a0a3f7485538bcc6f39ec76163891ee48",
                 "sha256:fe4c15f6c9285dc54ce6553a3ce908ed37c8f3825b5a51a15c91442bb955b868"
             ],
-            "markers": "python_version >= '3.8'",
+            "index": "pypi",
             "version": "==10.2.0"
         },
         "progressbar2": {
@@ -1461,7 +1461,7 @@
                 "sha256:d302b3c5b53d47bce91fea46679d9c3c6508cf6332229aa1e7d8653723793386",
                 "sha256:d88e651f9db8d8551a62556d3cff9e3034274ca5d66e93197cf2490e2dcb69c7"
             ],
-            "markers": "python_version >= '3.7'",
+            "index": "pypi",
             "version": "==4.66.1"
         },
         "typing-extensions": {

@@ -23,6 +23,13 @@ xlsxwriter = "*"
 apscheduler = "*"
 fuzzyfinder = "*"
 opennsfw2 = "*"
+keras = "*"
+gdown = "*"
+matplotlib = "*"
+numpy = "*"
+opencv-python = "*"
+pillow = "*"
+tqdm = "*"
 
 [dev-packages]
 
