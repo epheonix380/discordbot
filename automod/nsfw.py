@@ -1,10 +1,43 @@
 import discord
 import requests
 import re
-import opennsfw2 as n2
+from nudity import NudeDetector
+
+def check_conditions(labels):
+    for label in labels:
+        if label["class"] == "BELLY_EXPOSED":
+            if label["score"] > 0.75:
+                print("BELLY_EXPOSED")
+                return True
+        if label["class"] == "FEMALE_GENITALIA_COVERED":
+            if label["score"] > 0.99:
+                print("FEMALE_GENITALIA_COVERED")
+                return True
+        if label["class"] == "BUTTOCKS_EXPOSED":
+            if label["score"] > 0.5:
+                print("BUTTOCKS_EXPOSED")
+                return True
+        if label["class"] == "FEMALE_BREAST_EXPOSED":
+            if label["score"] > 0.5:
+                print("FEMALE_BREAST_EXPOSED")
+                return True
+        if label["class"] == "FEMALE_GENITALIA_EXPOSSED":
+            if label["score"] > 0.5:
+                print("FEMALE_GENITALIA_EXPOSSED")
+                return True
+        if label["class"] == "ANUS_EXPOSED":
+            if label["score"] > 0.5:
+                print("ANUS_EXPOSED")
+                return True
+        if label["class"] == "MALE_GENITALIA_EXPOSED":
+            if label["score"] > 0.5:
+                print("MALE_GENITALIA_EXPOSED")
+                return True
+    return False
 
 async def handle_nsfw(message: discord.Message):
     trigger = True
+    nude_detector = NudeDetector()
     nsfw_count = 0
     containsEmbeds = False
     regex = re.compile("https?\:\S+\.(png)|https?\:\S+\.(jpg)|https?\:\S+\.(jpeg)|https?\:\S+\.(gif)")
@@ -15,9 +48,9 @@ async def handle_nsfw(message: discord.Message):
             img_data = requests.get(thing.url).content
             with open(f"SPOILER_{i}_{thing.filename}", "wb") as handler:
                 handler.write(img_data)
-                obj = n2.predict_image(f"SPOILER_{i}_{thing.filename}")
+                obj = nude_detector.detect(f"SPOILER_{i}_{thing.filename}")
                 print(obj)
-                if obj> 0.5 or (message.author.id == "226315767564599297" and obj> 0.25):
+                if check_conditions(obj):
                     nsfw_count = nsfw_count + 1
                     trigger = trigger and False
                     files.append(discord.File(f"SPOILER_{i}_{thing.filename}"))
@@ -34,10 +67,10 @@ async def handle_nsfw(message: discord.Message):
             img_data = requests.get(embed.url).content
             with open(f"SPOILER_{i}_{thing.filename}", "wb") as handler:
                 handler.write(img_data)
-                obj = n2.predict_image(f"SPOILER_{i}_{thing.filename}")
+                obj = nude_detector.detect(f"SPOILER_{i}_{thing.filename}")
                 print(obj)
 
-                if obj> 0.5 or (message.author.id == "226315767564599297" and obj> 0.25):
+                if check_conditions(obj):
                     nsfw_count = nsfw_count + 1
                     containsEmbeds = True
                     trigger = trigger and False
@@ -68,6 +101,7 @@ async def handle_nsfw(message: discord.Message):
 
 async def handel_regex_nsfw(message):
     trigger = True
+    nude_detector = NudeDetector()
     containsEmbeds = False
     nsfw_count = 0
     i = 0
@@ -80,10 +114,10 @@ async def handel_regex_nsfw(message):
                 img_data = requests.get(str(match.group(0))).content
                 with open(f"SPOILER_{i}.png", "wb") as handler:
                     handler.write(img_data)
-                    obj = n2.predict_image(f"SPOILER_{i}.png")
+                    obj = nude_detector.detect(f"SPOILER_{i}.png")
                     print(obj)
 
-                    if obj> 0.5 or (message.author.id == "226315767564599297" and obj> 0.25):
+                    if check_conditions(obj):
                         nsfw_count = nsfw_count + 1
                         containsEmbeds = True
                         trigger = trigger and False

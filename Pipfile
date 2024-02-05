@@ -17,18 +17,14 @@ psycopg2 = "*"
 djangorestframework = "*"
 markdown = "*"
 django-filter = "*"
-librespot = {git = "https://github.com/kokarare1212/librespot-python"}
 requests = "*"
 xlsxwriter = "*"
 apscheduler = "*"
 fuzzyfinder = "*"
-opennsfw2 = "*"
 keras = "*"
-gdown = "*"
 matplotlib = "*"
 numpy = "*"
 opencv-python = "*"
-pillow = "*"
 tqdm = "*"
 
 [dev-packages]
