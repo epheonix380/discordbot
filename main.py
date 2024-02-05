@@ -99,7 +99,7 @@ async def on_message(message: discord.Message):
         await handleGymOptIn(message=message)
     elif message.content.startswith(",gym"):
         await handleGym(message=message,client=client)
-    elif message.content.startswith(",best"):
+    elif message.content.startswith(",remind"):
         await handleReminderAdd(message=message)
     elif message.content.startswith(",test") and (str(message.author.id)) == "218174413604913152":
         await handleReminderCheck(client=client)
@@ -159,7 +159,7 @@ async def on_ready():
 async def tick():
     # await handleDailyGym(client=client)
     time.sleep(0)
-    # await handleReminderCheck(client=client)
+    await handleReminderCheck(client=client)
 
 
 scheduler = AsyncIOScheduler()

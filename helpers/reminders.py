@@ -23,6 +23,11 @@ def updateReminder(id:str, newTime:datetime.datetime, tzTime:datetime.datetime):
         memberReminder.time=newTime
         memberReminder.save()
 
+@sync_to_async
+def deleteReminder(id:str):
+    memberReminder = MemberReminder.objects.get(id=id)
+    memberReminder.delete()
+
 async def handleReminderCheck(client:discord.Client):
     reminders = await getMembersHelper()
     currentTime = datetime.datetime.now(tz=datetime.timezone.utc)
@@ -41,31 +46,45 @@ async def handleReminderCheck(client:discord.Client):
             frequency = freq1 + freq2
         member = reminder["member"]
         tzTime = time.replace(tzinfo=datetime.timezone.utc)
-        if tzTime<currentTime:
-            user:discord.User = await client.fetch_user(str(member["member_id"]))
-            user_dm = await user.create_dm()
-            await user_dm.send(reminder["reminder_text"])
+        if tzTime<currentTime and tzTime+datetime.timedelta(minutes=5)>currentTime:
+            if reminder["target"] is not None:
+                channel:discord.guild.GuildChannel = await client.fetch_channel(int(reminder["origin_channel"]))
+                await channel.send(content=f"<@{reminder['target']}> reminder to {reminder['reminder_text']}")
+            else:
+                user:discord.User = await client.fetch_user(str(member["member_id"]))
+                user_dm = await user.create_dm()
+                await user_dm.send(reminder["reminder_text"])
             newTime = tzTime + frequency
             await updateReminder(id=str(reminder["id"]), newTime=newTime, tzTime=tzTime)
+        elif tzTime<currentTime:
+            await deleteReminder(id=str(reminder["id"]))
+
             
 
 
 @sync_to_async
-def addReminder(member_id:str,reminder_text:str, time:datetime.datetime, frequency:datetime.timedelta = datetime.timedelta(seconds=0), isComplete:bool = False):
+def addReminder(member_id:str,origin_guild:str,origin_channel:str, target:str, reminder_text:str, time:datetime.datetime, frequency:datetime.timedelta = datetime.timedelta(seconds=0), isComplete:bool = False):
     member = Member.objects.get(member_id=member_id)
-    print(time)
-    reminder = MemberReminder(member=member, reminder_text=reminder_text, time=time, frequency=frequency, isComplete=isComplete)
+    reminder = MemberReminder(member=member,origin_guild=origin_guild, origin_channel=origin_channel, reminder_text=reminder_text, time=time, frequency=frequency, isComplete=isComplete, target=target)
     reminder.save()
 
 def checkRegex(regex):
     return regex is not None
 
 async def handleReminderAdd(message:discord.Message):
-    inRegex = re.search("(?<=(\sin\s))[\w\W]+?(?=$|(to)|(repeat after))",message.content)
-    onRegex = re.search("(?<=(\son\s))[\w\W]+?(?=$|(to)|(repeat after))",message.content)
-    atRegex = re.search("(?<=(\sat\s))[\w\W]+?(?=$|(to)|(repeat after))",message.content)
-    toRegex = re.search("(?<=(\sto\s))[\w\W]+?(?=$|(in)|(at)|(on)|(repeat after))",message.content)
+    inRegex = re.search("(?<=(\sin\s))[\w\W]+?(?=$|( to )|( repeat after ))",message.content)
+    onRegex = re.search("(?<=(\son\s))[\w\W]+?(?=$|( to )|( repeat after ))",message.content)
+    atRegex = re.search("(?<=(\sat\s))[\w\W]+?(?=$|( to )|( repeat after ))",message.content)
+    toRegex = re.search("(?<=(\sto\s))[\w\W]+?(?=$|( in )|( at )|( on )|( repeat after ))",message.content)
     to = ""
+    origin_guild = message.guild.id
+    origin_channel = message.channel.id
+    target = None
+    split = message.content.split(" ")
+    if split[1] == "me":
+        target = None
+    elif split[1].startswith("<@") and split[1].endswith(">"):
+        target = split[1][2:-1:1]
     if checkRegex(toRegex):
         to = toRegex.group(0)
     amount = 0 + 1 if checkRegex(inRegex) else 0 + 1 if checkRegex(onRegex) else 0 + 1 if checkRegex(atRegex) else 0
@@ -77,21 +96,22 @@ async def handleReminderAdd(message:discord.Message):
             inGroup = inRegex.group(0)
             daysRegex = re.search("[\d]+?(?=\s+?((days)|(day)))",inGroup)
             hourRegex = re.search("[\d]+?(?=\s+?((hours)|(hour)|(hrs)|(hr)|(h)))",inGroup)
-            minuteRegex = re.search("[\d]+?(?=\s+?((mins)|(minutes)))",inGroup)
+            minuteRegex = re.search("[\d]+?(?=\s+?((min)|(mins)|(minutes)|(minute)))",inGroup)
             if checkRegex(daysRegex):
-                days = daysRegex.group(0)
+                days = int(daysRegex.group(0))
             if checkRegex(hourRegex):
-                hours = hourRegex.group(0)
+                hours = int(hourRegex.group(0))
             if checkRegex(minuteRegex):
-                minutes = minuteRegex.group(0)
-            now = datetime.datetime.now()
-            await addReminder(member_id=message.author.id, reminder_text=to, time=now, frequency=datetime.timedelta(days=days, hours=hours, minutes=minutes))
-            await message.channel.send("Added reminder")
+                minutes = int(minuteRegex.group(0))
+            now = datetime.datetime.now(tz=datetime.timezone.utc)
+            future_time = now + datetime.timedelta(days=days, hours=hours, minutes=minutes)
+            await addReminder(member_id=message.author.id, reminder_text=to, time=future_time, target=target, origin_guild=origin_guild, origin_channel=origin_channel)
+            await message.channel.send(f"I'll remind {'you' if target is None else '<@' + target + '>'} in {str(days)+' days, ' if days>0 else ''}{str(hours)+' hours, ' if hours>0 else ''}{str(minutes)+' minutes' if minutes>0 else ''} to {to}")
         elif checkRegex(onRegex):
             print(onRegex.group(0))
         elif checkRegex(atRegex):
             print(atRegex.group(0))
-        await message.channel.send("Hi")
+        
     elif amount > 1:
         await message.channel.send("Too many identifiers")
     else:

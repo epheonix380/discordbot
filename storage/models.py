@@ -85,7 +85,9 @@ class PlaylistElement(models.Model):
 
 class MemberReminder(models.Model):
     member = models.ForeignKey(Member, on_delete=models.CASCADE)
-    target = models.CharField(max_length=24)
+    target = models.CharField(max_length=24, default=None, null=True)
+    origin_channel = models.CharField(max_length=24, default=None, null=True)
+    origin_guild = models.CharField(max_length=24, default=None, null=True)
     reminder_text = models.CharField(max_length=2048, default="")
     time = models.DateTimeField(default=datetime.datetime.fromtimestamp(0,tz=datetime.timezone.utc))
     frequency = models.DurationField(default=datetime.timedelta(seconds=0))
