@@ -77,6 +77,7 @@ async def handleReminderAdd(message:discord.Message):
     onRegex = re.search("(?<=(\son\s))[\w\W]+?(?=$|( to )|( repeat after ))",message.content)
     atRegex = re.search("(?<=(\sat\s))[\w\W]+?(?=$|( to )|( repeat after ))",message.content)
     toRegex = re.search("(?<=(\sto\s))[\w\W]+?(?=$|( in )|( at )|( on )|( repeat after ))",message.content)
+    repeatRegex = re.search("(?<=( repeat after ))[\D\d]+?(?=$|( in)|( at)|( on)|( to))", message.content)
     to = ""
     origin_guild = message.guild.id
     origin_channel = message.channel.id
@@ -88,7 +89,7 @@ async def handleReminderAdd(message:discord.Message):
         target = split[1][2:-1:1]
     if checkRegex(toRegex):
         to = toRegex.group(0)
-    amount = 0 + 1 if checkRegex(inRegex) else 0 + 1 if checkRegex(onRegex) else 0 + 1 if checkRegex(atRegex) else 0
+    amount = 0 + (1 if checkRegex(inRegex) else 0) + (1 if checkRegex(onRegex) else 0) + (1 if checkRegex(atRegex) else 0)
     if amount == 1:
         days = 0
         hours = 0

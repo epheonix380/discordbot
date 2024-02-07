@@ -81,16 +81,24 @@ class PlaylistElement(models.Model):
     source = models.CharField(choices=SourceChoice.choices, max_length=32)
     order = models.PositiveIntegerField()
 
+class ComplexFrequecy(models.Model):
+    years = models.IntegerField(default=0)
+    months = models.IntegerField(default=0)
+    weeks = models.IntegerField(default=0)
+    days = models.IntegerField(default=0)
+    hours = models.IntegerField(default=0)
+    minutes = models.IntegerField(default=0)
 
 
 class MemberReminder(models.Model):
-    member = models.ForeignKey(Member, on_delete=models.CASCADE)
+    member = models.ForeignKey(Member, on_delete=models.DO_NOTHING)
     target = models.CharField(max_length=24, default=None, null=True)
     origin_channel = models.CharField(max_length=24, default=None, null=True)
     origin_guild = models.CharField(max_length=24, default=None, null=True)
     reminder_text = models.CharField(max_length=2048, default="")
     time = models.DateTimeField(default=datetime.datetime.fromtimestamp(0,tz=datetime.timezone.utc))
     frequency = models.DurationField(default=datetime.timedelta(seconds=0))
+    complexFrequecy = models.ForeignKey(ComplexFrequecy, on_delete=models.CASCADE, default=None, null=True)
     isComplete = models.BooleanField(default=False)
 
 class MemberGymDay(models.Model):
