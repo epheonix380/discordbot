@@ -6,6 +6,7 @@ import time as TIME
 from asgiref.sync import sync_to_async
 from storage.models import Member, MemberReminder
 from storage.serializers import MemberReminderSerializer
+from helpers.timeStrore import getDefaultTimezone, getFormat
 
 @sync_to_async
 def getMembersHelper():
@@ -110,7 +111,30 @@ async def handleReminderAdd(message:discord.Message):
         elif checkRegex(onRegex):
             print(onRegex.group(0))
         elif checkRegex(atRegex):
-            print(atRegex.group(0))
+            atGroup = atRegex.group(0)
+            hourRegex = re.search("[\d]{1,2}(?=\s?((pm)|(:)|(am)))",atGroup)
+            minuteRegex = re.search("(?<=(:))[\d]{2}", atGroup)
+            pmRegex = re.search("(?<=\d)(pm)", atGroup)
+            userTimezone = await getDefaultTimezone(message.author.id)
+            if userTimezone is None:
+                content = "No default timezone found:\nThis version of the command requires you to set a default timezone if you do not want to set one you can use this command instead:\n```,time convert <time> <from-city-name> to <to-city-name>```\nOr you can set your default timezone using this command:\n```,time default <city-name>```"
+                return await message.channel.send(content)
+            if checkRegex(hourRegex):
+                hours = int(hourRegex.group(0))
+                if checkRegex(pmRegex):
+                    if(pmRegex.group(0) == "pm"):
+                        hours = (hours + 12)%24
+            if checkRegex(minuteRegex):
+                minutes = int(minuteRegex.group(0))
+            fromTimeZone = pytz.timezone(userTimezone)
+            today = datetime.datetime.now(tz=fromTimeZone)
+            future_time = fromTimeZone.localize(datetime.datetime(year=today.year, month=today.month, day=today.day, hour=hours, minute=minutes))
+            if (future_time < today):
+                future_time = future_time + datetime.timedelta(days=1)
+            timeFormat = await getFormat(message.author.id)
+            formatedTimeString = future_time.strftime(timeFormat)
+            await addReminder(member_id=message.author.id, reminder_text=to, time=future_time, target=target, origin_guild=origin_guild, origin_channel=origin_channel)
+            await message.channel.send(f"I'll remind {'you' if target is None else '<@' + target + '>'} at {formatedTimeString}")
         
     elif amount > 1:
         await message.channel.send("Too many identifiers")
