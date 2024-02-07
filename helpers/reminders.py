@@ -54,7 +54,7 @@ async def handleReminderCheck(client:discord.Client):
             else:
                 user:discord.User = await client.fetch_user(str(member["member_id"]))
                 user_dm = await user.create_dm()
-                await user_dm.send(reminder["reminder_text"])
+                await user_dm.send(f"Reminder to: {reminder['reminder_text']}")
             newTime = tzTime + frequency
             await updateReminder(id=str(reminder["id"]), newTime=newTime, tzTime=tzTime)
         elif tzTime<currentTime:
