@@ -35,8 +35,15 @@ async def handleReminderCheck(client:discord.Client):
     TIME.sleep(0)
     for reminder in reminders:
         TIME.sleep(0)
-
-        time = datetime.datetime.strptime((reminder["time"]), "%Y-%m-%dT%H:%M:%S.%fZ")
+        try:
+            time = datetime.datetime.strptime((reminder["time"]), "%Y-%m-%d %H:%M:%S.%f")
+        except:
+            try:
+                time = datetime.datetime.strptime((reminder["time"]), "%Y-%m-%d %H:%M:%S")
+            except:
+                print(f"Error parsing time: {reminder['time']}")
+                continue
+        print(f"Parsed correctly: {reminder['time']}")
         if (reminder["frequency"][2:3] == ":"):
             freq = datetime.datetime.strptime(reminder["frequency"], '%H:%M:%S')
             frequency = datetime.timedelta(hours=freq.hour, minutes=freq.minute, seconds=freq.second)
