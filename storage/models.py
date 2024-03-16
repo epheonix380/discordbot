@@ -5,6 +5,11 @@ TIMEZONES = tuple(zip(pytz.all_timezones, pytz.all_timezones))
 
 # Create your models here.
 
+class GameVersion(models.Model):
+    appid = models.CharField(max_length=32)
+    version = models.CharField(max_length=64, default="")
+    name = models.CharField(max_length=128, default="")
+
 class GuessTheHero(models.Model):
     guild_id = models.CharField(max_length=24)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -21,7 +26,6 @@ class Guild(models.Model):
     guess_the_hero = models.CharField(max_length=24, null=True, blank=True, default=None)
     nsfw_channel = models.CharField(max_length=24, null=True, blank=True, default=None)
 
-
 class ChannelCategories(models.IntegerChoices):
     NSFW = 1, "NSFW"
     GTH = 2, "Guess The Hero"
@@ -31,6 +35,10 @@ class Channel(models.Model):
     guild = models.ForeignKey(Guild, on_delete=models.CASCADE)
     channel_id = models.CharField(max_length=32)
     category = models.CharField(max_length=32, choices=ChannelCategories.choices, default=ChannelCategories.NSFW)
+
+class GameVersionSubscriptions(models.Model):
+    game = models.ForeignKey(GameVersion, on_delete=models.CASCADE)
+    channel = models.ForeignKey(Channel, on_delete=models.CASCADE)
 
 class GuildActivity(models.Model):
     guild = models.ForeignKey(Guild, on_delete=models.CASCADE)

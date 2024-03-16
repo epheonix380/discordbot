@@ -40,6 +40,7 @@ from commands.activity import handleActivity
 from commands.help import helpHandler
 from commands.summary import handleSummary
 from commands.gym import handleDailyGym, handleGymOptIn, sendGymMessage, handleGym
+from commands.gameSubscription import subscribe, checkGameVersions
 from helpers.reminders import handleReminderCheck, addReminder,handleReminderAdd
 
 @client.event
@@ -101,8 +102,10 @@ async def on_message(message: discord.Message):
         await handleGym(message=message,client=client)
     elif message.content.startswith(",remind"):
         await handleReminderAdd(message=message)
+    elif message.content.startswith(",subscribe"):
+        await subscribe(message=message)
     elif message.content.startswith(",test") and (str(message.author.id)) == "218174413604913152":
-        await handleReminderCheck(client=client)
+        await checkGameVersions(client=client)
     await addGuildActivity(message.guild.id, message, is_nsfw)
 
 async def vc_auto_complete(interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
@@ -159,11 +162,13 @@ async def on_ready():
 async def tick():
     # await handleDailyGym(client=client)
     time.sleep(0)
-    await handleReminderCheck(client=client)
+    print("Tick!")
+    await checkGameVersions(client=client)
+    #await handleReminderCheck(client=client)
 
 
 scheduler = AsyncIOScheduler()
-scheduler.add_job(tick, 'interval', minutes=1)
+scheduler.add_job(tick, 'interval', minutes=5)
 scheduler.start()
 loop = asyncio.get_event_loop()
 loop.create_task(client.start(TOKEN))

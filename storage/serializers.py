@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Member,MemberGymDay,MemberReminder, MemberTimeZoneMap, TimeZone, Item, GuildActivity, MemberGuildActivity, WeightedGuildActivity
+from .models import Channel,GameVersionSubscriptions,GameVersion,Member,MemberGymDay,MemberReminder, MemberTimeZoneMap, TimeZone, Item, GuildActivity, MemberGuildActivity, WeightedGuildActivity
 
 class ItemSerializer(serializers.ModelSerializer):
     class Meta:
@@ -19,6 +19,12 @@ class TimeMapSerializer(serializers.ModelSerializer):
     def get_time_zone(self, obj):
         return str(obj.time_zone.time_zone)
     
+class GameSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GameVersion
+        fields = '__all__'
+
+
 class GuildActivitySerializer(serializers.ModelSerializer):
 
     class Meta:
@@ -60,3 +66,17 @@ class MemberGymDaySerializer(serializers.ModelSerializer):
     class Meta:
         model=MemberGymDay
         fields = ["member","date","isGym"]
+
+class ChannelSerializer(serializers.ModelSerializer):
+    guild = serializers.SlugRelatedField(slug_field="guild_id", read_only=True)
+    class Meta:
+        model = Channel
+        fields = ["channel_id", "guild"]
+
+class GameSubscriptionSerializer(serializers.ModelSerializer):
+    game = GameSerializer(read_only=True)
+    channel = ChannelSerializer(read_only=True)
+    class Meta:
+        model = GameVersionSubscriptions
+        fields = ['game', 'channel']
+    
