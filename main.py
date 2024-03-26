@@ -42,6 +42,7 @@ from commands.summary import handleSummary
 from commands.gym import handleDailyGym, handleGymOptIn, sendGymMessage, handleGym
 from commands.gameSubscription import subscribe, checkGameVersions
 from helpers.reminders import handleReminderCheck, addReminder,handleReminderAdd
+from commands.music.player import start_player
 
 @client.event
 async def on_ready():
@@ -105,7 +106,7 @@ async def on_message(message: discord.Message):
     elif message.content.startswith(",subscribe"):
         await subscribe(message=message)
     elif message.content.startswith(",test") and (str(message.author.id)) == "218174413604913152":
-        await checkGameVersions(client=client)
+        await start_player(message=message, client=client)
     await addGuildActivity(message.guild.id, message, is_nsfw)
 
 async def vc_auto_complete(interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
