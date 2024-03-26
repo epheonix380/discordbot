@@ -40,6 +40,7 @@ async def nsfw_helper(message: discord.Message):
 async def manual_nsfw(message: discord.Message):
     if (message.reference and message.reference.resolved):
         await nsfw_helper_reference(message=message)
+        return
     else:
         channel: discord.TextChannel = message.channel
         history: list[discord.Message] = channel.history(limit=50, before=message, oldest_first=False)
@@ -53,3 +54,5 @@ async def manual_nsfw(message: discord.Message):
                 elif any(elem.group(0) is not None for elem in arr):
                     await nsfw_helper(message=msg)
                     return
+        await channel.send("No messages with images were detected within the 50 message limit. Please use the reply function for messages further back than this.")
+        return
