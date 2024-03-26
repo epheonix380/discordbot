@@ -45,10 +45,11 @@ async def manual_nsfw(message: discord.Message):
         history: list[discord.Message] = channel.history(limit=50, before=message, oldest_first=False)
         regex = re.compile("https?\:\S+\.(png)|https?\:\S+\.(jpg)|https?\:\S+\.(jpeg)|https?\:\S+\.(gif)")
         async for msg in history:
-            arr = re.finditer(regex, msg.content)
-            if len(msg.attachments) > 0:
-                await nsfw_helper(message=msg)
-                return
-            elif any(elem.group(0) is not None for elem in arr):
-                await nsfw_helper(message=msg)
-                return
+            if msg.author.id != 845668514341191750:
+                arr = re.finditer(regex, msg.content)
+                if len(msg.attachments) > 0:
+                    await nsfw_helper(message=msg)
+                    return
+                elif any(elem.group(0) is not None for elem in arr):
+                    await nsfw_helper(message=msg)
+                    return
