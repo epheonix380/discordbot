@@ -63,8 +63,15 @@ async def checkGameVersions(client: Client):
                 patchNoteData = patch['events'][0]['gid']
                 patchNotes = f"{patch['events'][0]['event_name']}\n\n{patch['events'][0]['announcement_body']['body']}"
             time.sleep(0)
-            buildid = res["data"][appid]["depots"]["branches"]["public"]["buildid"]
-            if game["version"] != buildid or (patchNoteData is not None and game['patchVersion'] != patchNoteData):
+            buildid = None
+            if (res is not None and
+                res["data"] is not None and
+                res["data"][appid]["depots"] is not None and
+                res["data"][appid]["depots"]["branches"] is not None and 
+                res["data"][appid]["depots"]["branches"]["public"] is not None and
+                res["data"][appid]["depots"]["branches"]["public"]["buildid"] is not None):
+                buildid = res["data"][appid]["depots"]["branches"]["public"]["buildid"]
+            if (buildid is not None and game["version"] != buildid) or (patchNoteData is not None and game['patchVersion'] != patchNoteData):
                 time.sleep(0)
                 await updateCurrentVersion(appid=appid, version=buildid, patchVersion=patchNoteData)
                 channels = await getAllChannelsForGame(appid=appid)
