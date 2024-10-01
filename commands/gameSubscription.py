@@ -3,8 +3,18 @@ import discord
 from helpers.gamesStore import getOrCreate, updateCurrentVersion, getAllGames, getAllChannelsForGame
 import requests
 import time
+import re
 
-def fetch(appid):
+def fetchPatchNotes(appid):
+    res = requests.get(f"https://store.steampowered.com/events/ajaxgetadjacentpartnerevents/?appid={appid}&count_before=0&count_after=1")
+    if (res.status_code == 200):
+        test = res.json()
+        return test
+    else:
+        print("here3")
+        return None
+
+def fetchGameVersionAndName(appid):
     res = requests.get(f"https://api.steamcmd.net/v1/info/{appid}")
     if (res.status_code == 200):
         test = res.json()
@@ -21,11 +31,13 @@ async def subscribe(message: Message):
         appID = commands[1]
         game, wasCreated = await getOrCreate(appid=appID, channelid=message.channel.id, guildid=message.guild.id)
         if (wasCreated):
-            res = fetch(appid=appID)
-            if (res is not None):
+            res = fetchGameVersionAndName(appid=appID)
+            patch = fetchPatchNotes(appid=appID)
+            if (res is not None and patch is not None and patch['success'] == 1):
                 buildid = res["data"][appID]["depots"]["branches"]["public"]["buildid"]
                 gameName = res["data"][appID]["common"]["name"]
-                await updateCurrentVersion(appid=appID, version=buildid, name=gameName)
+                patchVersion = patch['events'][0]['gid']
+                await updateCurrentVersion(appid=appID, version=buildid, name=gameName, patchVersion=patchVersion)
                 await message.channel.send(f"Successfully subscribed to game {gameName} , latest build id was {buildid}")
             else:
                 await message.channel.send("Something bad happened")
@@ -39,15 +51,22 @@ async def checkGameVersions(client: Client):
     time.sleep(0)
     for game in games:
         time.sleep(0)
+        print(f"Start with game: {game['name']}")
         appid = game["appid"]
         if appid is not None and appid != "":
             time.sleep(0)
-            res = fetch(appid=appid)
+            res = fetchGameVersionAndName(appid=appid)
+            patch = fetchPatchNotes(appid=appid)
+            patchNoteData = None
+            patchNotes = ""
+            if (patch is not None and patch['success'] == 1):
+                patchNoteData = patch['events'][0]['gid']
+                patchNotes = f"{patch['events'][0]['event_name']}\n\n{patch['events'][0]['announcement_body']['body']}"
             time.sleep(0)
             buildid = res["data"][appid]["depots"]["branches"]["public"]["buildid"]
-            if game["version"] != buildid:
+            if game["version"] != buildid or (patchNoteData is not None and game['patchVersion'] != patchNoteData):
                 time.sleep(0)
-                await updateCurrentVersion(appid=appid, version=buildid)
+                await updateCurrentVersion(appid=appid, version=buildid, patchVersion=patchNoteData)
                 channels = await getAllChannelsForGame(appid=appid)
                 for channel in channels:
                     time.sleep(0)
@@ -58,5 +77,45 @@ async def checkGameVersions(client: Client):
                     await textChannel.send(
                         f"New Game Update for game {game['name']}, with build number {buildid}"
                     )
-
+                    def urlFunction(matchobj: re.Match):
+                        matchStr:str = matchobj.group(0)
+                        if matchStr is not None and matchStr != "":
+                            formattedStr:str = matchStr[5:-6]
+                            url = formattedStr.split("]")[0]
+                            text = formattedStr.split("]")[1]
+                            return f"[{text}]({url})"
+                        else:
+                            return ""
+                    def imgFunction(matchobj: re.Match):
+                        return ""
+                    if (patchNotes != ""):
+                        patchNotes = patchNotes.replace(
+                                "[b]", "*"
+                            ).replace(
+                                "[/b]", "*"
+                            ).replace(
+                                "[i]", "**"
+                            ).replace(
+                                "[/i]", "**"
+                            )
+                        patchNotes = re.sub(
+                            "\[url=[\s\S]+?\[\/url\]",
+                            urlFunction,
+                            patchNotes
+                        )
+                        patchNotes = re.sub(
+                            "\[img\][\s\S]+?\[\/img\]",
+                            imgFunction,
+                            patchNotes
+                        )
+                        
+                    patchLength = len(patchNotes)
+                    while patchLength != 0:
+                        if (patchLength < 1999):
+                            chunk = patchNotes
+                        else: 
+                            chunk = patchNotes[0:1999]
+                        patchNotes = patchNotes[1999::]
+                        patchLength = len(patchNotes)
+                        await textChannel.send(chunk)
 

@@ -15,10 +15,12 @@ def getOrCreate(appid, channelid, guildid):
     return data, wasCreated
 
 @sync_to_async
-def updateCurrentVersion(appid, version, name=None):
+def updateCurrentVersion(appid, version, patchVersion=None, name=None):
     qs = GameVersion.objects.get(appid=appid)
     if(name is not None):
         qs.name = name
+    if(patchVersion is not None):
+        qs.patchVersion = patchVersion
     qs.version = version
     qs.save()
 
