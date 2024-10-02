@@ -85,45 +85,46 @@ async def checkGameVersions(client: Client):
                     await textChannel.send(
                         f"New Game Update for game {game['name']}, with build number {buildid}"
                     )
-                    def urlFunction(matchobj: re.Match):
-                        matchStr:str = matchobj.group(0)
-                        if matchStr is not None and matchStr != "":
-                            formattedStr:str = matchStr[5:-6]
-                            url = formattedStr.split("]")[0]
-                            text = formattedStr.split("]")[1]
-                            return f"[{text}]({url})"
-                        else:
+                    if (patchNoteData is not None and game['patchVersion'] != patchNoteData):
+                        def urlFunction(matchobj: re.Match):
+                            matchStr:str = matchobj.group(0)
+                            if matchStr is not None and matchStr != "":
+                                formattedStr:str = matchStr[5:-6]
+                                url = formattedStr.split("]")[0]
+                                text = formattedStr.split("]")[1]
+                                return f"[{text}]({url})"
+                            else:
+                                return ""
+                        def imgFunction(matchobj: re.Match):
                             return ""
-                    def imgFunction(matchobj: re.Match):
-                        return ""
-                    if (patchNotes != ""):
-                        patchNotes = patchNotes.replace(
-                                "[b]", "*"
-                            ).replace(
-                                "[/b]", "*"
-                            ).replace(
-                                "[i]", "**"
-                            ).replace(
-                                "[/i]", "**"
+                        if (patchNotes != ""):
+                            patchNotes = patchNotes.replace(
+                                    "[b]", "*"
+                                ).replace(
+                                    "[/b]", "*"
+                                ).replace(
+                                    "[i]", "**"
+                                ).replace(
+                                    "[/i]", "**"
+                                )
+                            patchNotes = re.sub(
+                                "\[url=[\s\S]+?\[\/url\]",
+                                urlFunction,
+                                patchNotes
                             )
-                        patchNotes = re.sub(
-                            "\[url=[\s\S]+?\[\/url\]",
-                            urlFunction,
-                            patchNotes
-                        )
-                        patchNotes = re.sub(
-                            "\[img\][\s\S]+?\[\/img\]",
-                            imgFunction,
-                            patchNotes
-                        )
-                        
-                    patchLength = len(patchNotes)
-                    while patchLength != 0:
-                        if (patchLength < 1999):
-                            chunk = patchNotes
-                        else: 
-                            chunk = patchNotes[0:1999]
-                        patchNotes = patchNotes[1999::]
+                            patchNotes = re.sub(
+                                "\[img\][\s\S]+?\[\/img\]",
+                                imgFunction,
+                                patchNotes
+                            )
+                            
                         patchLength = len(patchNotes)
-                        await textChannel.send(chunk)
+                        while patchLength != 0:
+                            if (patchLength < 1999):
+                                chunk = patchNotes
+                            else: 
+                                chunk = patchNotes[0:1999]
+                            patchNotes = patchNotes[1999::]
+                            patchLength = len(patchNotes)
+                            await textChannel.send(chunk)
 
