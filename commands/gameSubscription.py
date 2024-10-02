@@ -65,12 +65,12 @@ async def checkGameVersions(client: Client):
             time.sleep(0)
             buildid = None
             if (res is not None and
-                res["data"] is not None and
-                res["data"][appid] is not None and
-                res["data"][appid]["depots"] is not None and
-                res["data"][appid]["depots"]["branches"] is not None and 
-                res["data"][appid]["depots"]["branches"]["public"] is not None and
-                res["data"][appid]["depots"]["branches"]["public"]["buildid"] is not None):
+                "data" in res and
+                appid in res["data"] and
+                "depots" in res["data"][appid] and
+                "branches" in res["data"][appid]["depots"] and 
+                "public" in res["data"][appid]["depots"]["branches"] and
+                "buildid" in res["data"][appid]["depots"]["branches"]["public"]):
                 buildid = res["data"][appid]["depots"]["branches"]["public"]["buildid"]
             if (buildid is not None and game["version"] != buildid) or (patchNoteData is not None and game['patchVersion'] != patchNoteData):
                 time.sleep(0)
