@@ -4,6 +4,38 @@ from helpers.gamesStore import getOrCreate, updateCurrentVersion, getAllGames, g
 import requests
 import time
 import re
+from steam.client import SteamClient
+import gevent
+
+def app_info(app_id):
+    connect_retries = 3
+    connect_timeout = 5
+    try:
+        # Sometimes it hangs for 30+ seconds. Normal connection takes about 500ms
+        for _ in range(connect_retries):
+            count = str(_)
+            time.sleep(0)
+            try:
+                with gevent.Timeout(connect_timeout):
+                    client = SteamClient()
+                    client.anonymous_login()
+                    client.verbose_debug = False
+                    info = client.get_product_info(apps=[app_id], timeout=5)
+                    return info
+
+            except gevent.timeout.Timeout:
+                print("An error occured")
+                client._connecting = False
+
+            else:
+                break
+        else:
+            print("Max Retries, Try Again")
+
+    except Exception as err:
+        print(err)
+        print("Another Exception Occured")
+
 
 def fetchPatchNotes(appid):
     res = requests.get(f"https://store.steampowered.com/events/ajaxgetadjacentpartnerevents/?appid={appid}&count_before=0&count_after=1")
@@ -15,10 +47,9 @@ def fetchPatchNotes(appid):
         return None
 
 def fetchGameVersionAndName(appid):
-    res = requests.get(f"https://api.steamcmd.net/v1/info/{appid}")
-    if (res.status_code == 200):
-        test = res.json()
-        return test
+    info = app_info(int(appid))
+    if info is not None:
+        return {"data":info["apps"], "status": "success"}
     else:
         print("here3")
         return None

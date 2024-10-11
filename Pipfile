@@ -26,6 +26,8 @@ matplotlib = "*"
 numpy = "*"
 opencv-python = "*"
 tqdm = "*"
+gevent = "*"
+steam = {extras = ["client"], version = "*"}
 
 [dev-packages]
 
