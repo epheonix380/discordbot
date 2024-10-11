@@ -4,6 +4,7 @@ from helpers.gamesStore import getOrCreate, updateCurrentVersion, getAllGames, g
 import requests
 import time
 import re
+import asyncio
 
 def fetchPatchNotes(appid):
     res = requests.get(f"https://store.steampowered.com/events/ajaxgetadjacentpartnerevents/?appid={appid}&count_before=0&count_after=1")
@@ -11,7 +12,6 @@ def fetchPatchNotes(appid):
         test = res.json()
         return test
     else:
-        print("here3")
         return None
 
 def fetchGameVersionAndName(appid):
@@ -20,7 +20,6 @@ def fetchGameVersionAndName(appid):
         test = res.json()
         return test
     else:
-        print("here3")
         return None
 
 
@@ -48,21 +47,23 @@ async def subscribe(message: Message):
 
 async def checkGameVersions(client: Client):
     games = await getAllGames()
-    time.sleep(0)
+    await asyncio.sleep(0)
     for game in games:
-        time.sleep(0)
+        await asyncio.sleep(0)
         print(f"Start with game: {game['name']}")
         appid = game["appid"]
         if appid is not None and appid != "":
-            time.sleep(0)
+            await asyncio.sleep(0)
             res = fetchGameVersionAndName(appid=appid)
+            await asyncio.sleep(0)
             patch = fetchPatchNotes(appid=appid)
+            await asyncio.sleep(0)
             patchNoteData = None
             patchNotes = ""
             if (patch is not None and patch['success'] == 1):
                 patchNoteData = patch['events'][0]['gid']
                 patchNotes = f"{patch['events'][0]['event_name']}\n\n{patch['events'][0]['announcement_body']['body']}"
-            time.sleep(0)
+            await asyncio.sleep(0)
             buildid = None
             if (res is not None and
                 "data" in res and
@@ -73,11 +74,13 @@ async def checkGameVersions(client: Client):
                 "buildid" in res["data"][appid]["depots"]["branches"]["public"]):
                 buildid = res["data"][appid]["depots"]["branches"]["public"]["buildid"]
             if (buildid is not None and game["version"] != buildid) or (patchNoteData is not None and game['patchVersion'] != patchNoteData):
-                time.sleep(0)
+                await asyncio.sleep(0)
                 await updateCurrentVersion(appid=appid, version=buildid, patchVersion=patchNoteData)
+                await asyncio.sleep(0)
                 channels = await getAllChannelsForGame(appid=appid)
+                await asyncio.sleep(0)
                 for channel in channels:
-                    time.sleep(0)
+                    await asyncio.sleep(0)
                     channel_id = channel["channel"]["channel_id"]
                     guild_id = channel["channel"]["guild"]
                     guild: discord.Guild = await client.fetch_guild(guild_id)
@@ -86,6 +89,7 @@ async def checkGameVersions(client: Client):
                         f"New Game Update for game {game['name']}, with build number {buildid}"
                     )
                     if (patchNoteData is not None and game['patchVersion'] != patchNoteData):
+                        await asyncio.sleep(0)
                         def urlFunction(matchobj: re.Match):
                             matchStr:str = matchobj.group(0)
                             if matchStr is not None and matchStr != "":
@@ -98,6 +102,7 @@ async def checkGameVersions(client: Client):
                         def imgFunction(matchobj: re.Match):
                             return ""
                         if (patchNotes != ""):
+                            await asyncio.sleep(0)
                             patchNotes = patchNotes.replace(
                                     "[b]", "*"
                                 ).replace(
@@ -107,19 +112,22 @@ async def checkGameVersions(client: Client):
                                 ).replace(
                                     "[/i]", "**"
                                 )
+                            await asyncio.sleep(0)
                             patchNotes = re.sub(
                                 "\[url=[\s\S]+?\[\/url\]",
                                 urlFunction,
                                 patchNotes
                             )
+                            await asyncio.sleep(0)
                             patchNotes = re.sub(
                                 "\[img\][\s\S]+?\[\/img\]",
                                 imgFunction,
                                 patchNotes
                             )
-                            
+                        await asyncio.sleep(0)
                         patchLength = len(patchNotes)
                         thread: Thread = await sentMessage.create_thread(name=f"Patch Notes for Game: {game['name']} with buildId: {buildid}")
+                        await asyncio.sleep(0)
                         while patchLength != 0:
                             if (patchLength < 1999):
                                 chunk = patchNotes
@@ -128,4 +136,5 @@ async def checkGameVersions(client: Client):
                             patchNotes = patchNotes[1999::]
                             patchLength = len(patchNotes)
                             await thread.send(chunk)
+                            await asyncio.sleep(0)
 

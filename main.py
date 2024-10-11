@@ -161,7 +161,6 @@ async def on_ready():
 
 async def tick():
     # await handleDailyGym(client=client)
-    time.sleep(0)
     print("Tick!")
     await checkGameVersions(client=client)
     #await handleReminderCheck(client=client)
