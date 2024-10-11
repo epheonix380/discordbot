@@ -1,4 +1,4 @@
-from discord import Message, Client
+from discord import Message, Client, Thread
 import discord
 from helpers.gamesStore import getOrCreate, updateCurrentVersion, getAllGames, getAllChannelsForGame
 import requests
@@ -82,7 +82,7 @@ async def checkGameVersions(client: Client):
                     guild_id = channel["channel"]["guild"]
                     guild: discord.Guild = await client.fetch_guild(guild_id)
                     textChannel: discord.TextChannel = await guild.fetch_channel(channel_id)
-                    await textChannel.send(
+                    sentMessage: Message = await textChannel.send(
                         f"New Game Update for game {game['name']}, with build number {buildid}"
                     )
                     if (patchNoteData is not None and game['patchVersion'] != patchNoteData):
@@ -119,6 +119,7 @@ async def checkGameVersions(client: Client):
                             )
                             
                         patchLength = len(patchNotes)
+                        thread: Thread = await sentMessage.create_thread(name=f"Patch Notes for Game: {game['name']} with buildId: {buildid}")
                         while patchLength != 0:
                             if (patchLength < 1999):
                                 chunk = patchNotes
@@ -126,5 +127,5 @@ async def checkGameVersions(client: Client):
                                 chunk = patchNotes[0:1999]
                             patchNotes = patchNotes[1999::]
                             patchLength = len(patchNotes)
-                            await textChannel.send(chunk)
+                            await thread.send(chunk)
 

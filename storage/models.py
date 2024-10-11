@@ -7,8 +7,8 @@ TIMEZONES = tuple(zip(pytz.all_timezones, pytz.all_timezones))
 
 class GameVersion(models.Model):
     appid = models.CharField(max_length=32)
-    version = models.CharField(max_length=64, default="")
-    patchVersion = models.CharField(max_length=64, default="")
+    version = models.CharField(max_length=64, default="", null=True)
+    patchVersion = models.CharField(max_length=64, default="", null=True)
     name = models.CharField(max_length=128, default="")
 
 class GuessTheHero(models.Model):
