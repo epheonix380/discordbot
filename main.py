@@ -58,10 +58,6 @@ async def on_message(message: discord.Message):
             await choices(message=message, client=client)
         elif message.content.startswith(",choices") or message.content.startswith("choices"):
             await saveChoices(message=message)
-        elif message.content.startswith(",gymOptIn") or message.content.startswith("gymOptIn"):
-            await handleGymOptIn(message=message)
-        elif message.content.startswith(",gym") or message.content.startswith("gym"):
-            await handleGym(message=message,client=client)
         return
     arr = []
     for match in re.finditer("https?\:\S+\.(png)|https?\:\S+\.(jpg)|https?\:\S+\.(jpeg)|https?\:\S+\.(gif)", message.content):
@@ -96,10 +92,6 @@ async def on_message(message: discord.Message):
         await handleActivity(message)
     elif message.content.startswith(",summary"):
         await handleSummary(message=message)
-    elif message.content.startswith(",gymOptIn"):
-        await handleGymOptIn(message=message)
-    elif message.content.startswith(",gym"):
-        await handleGym(message=message,client=client)
     elif message.content.startswith(",remind"):
         await handleReminderAdd(message=message)
     elif message.content.startswith(",subscribe"):
