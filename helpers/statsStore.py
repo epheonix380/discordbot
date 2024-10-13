@@ -68,11 +68,15 @@ def getGuildActivity(guild_id, message:discord.Message):
     worksheet.write_string(row, 4, "NSFW Images")
     for day in serializer:
         row+=1
-        worksheet.write_string(row,0,str(day["date"]))
-        worksheet.write_string(row,1,str(day["activity"]))
-        worksheet.write_string(row,2,str(day["word_count"]))
-        worksheet.write_string(row,3,str(day["image_count"]))
-        worksheet.write_string(row,4,str(day["nsfw_count"]))
+        arr = str(day["date"]).split('-')
+        year = int(arr[0])
+        month = int(arr[1])
+        d = int(arr[2])
+        worksheet.write_string(row,0,f"{d}/{month}/{year}")
+        worksheet.write_number(row,1,day["activity"]) #day["activity"]
+        worksheet.write_number(row,2,day["word_count"]) #day["word_count"]
+        worksheet.write_number(row,3,day["image_count"]) #day["image_count"]
+        worksheet.write_number(row,4,day["nsfw_count"]) #day["nsfw_count"]
     workbook.close()
     return "GuildActivity.xlsx"
 
@@ -90,11 +94,15 @@ def getIndividualGuildID(guild_id, member_id,message:discord.Message):
     worksheet.write_string(row, 4, "NSFW Images")
     for day in serializer:
         row+=1
-        worksheet.write_string(row,0,str(day["date"]))
-        worksheet.write_string(row,1,str(day["activity"]))
-        worksheet.write_string(row,2,str(day["word_count"]))
-        worksheet.write_string(row,3,str(day["image_count"]))
-        worksheet.write_string(row,4,str(day["nsfw_count"]))
+        arr = str(day["date"]).split('-')
+        year = int(arr[0])
+        month = int(arr[1])
+        d = int(arr[2])
+        worksheet.write_string(row,0,f"{d}/{month}/{year}")
+        worksheet.write_number(row,1,day["activity"]) #day["activity"]
+        worksheet.write_number(row,2,day["word_count"]) #day["word_count"]
+        worksheet.write_number(row,3,day["image_count"]) #day["image_count"]
+        worksheet.write_number(row,4,day["nsfw_count"]) #day["nsfw_count"]
     workbook.close()
     return "MemberActivity.xlsx"
 
