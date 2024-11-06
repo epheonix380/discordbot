@@ -16,6 +16,13 @@ def getMembersHelper():
     return data
 
 @sync_to_async
+def getSingleMemberHelper(member_id):
+    qs =  MemberReminder.objects.filter(member__member_id=member_id, isComplete=False, time__lte=datetime.datetime.now(tz=datetime.timezone.utc))
+    serialized = MemberReminderSerializer(qs, many=True)
+    data = serialized.data
+    return data
+
+@sync_to_async
 def updateReminder(id:str, newTime:datetime.datetime, tzTime:datetime.datetime):
     memberReminder = MemberReminder.objects.get(id=id)
     if newTime == tzTime:
@@ -67,7 +74,10 @@ async def handleReminderCheck(client:discord.Client):
         elif tzTime<currentTime:
             await deleteReminder(id=str(reminder["id"]))
 
-            
+async def handleReminderList(client:discord.Client, message:discord.Message):
+    reminders = await getSingleMemberHelper(member_id=message.author.id)
+    print(reminders)
+                       
 
 
 @sync_to_async

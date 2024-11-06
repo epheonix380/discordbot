@@ -111,6 +111,12 @@ async def checkGameVersions(client: Client):
                                     "[i]", "**"
                                 ).replace(
                                     "[/i]", "**"
+                                ).replace(
+                                    "[*]", "* "
+                                ).replace(
+                                    "[list]", ""
+                                ).replace(
+                                    "[/list]", ""
                                 )
                             await asyncio.sleep(0)
                             patchNotes = re.sub(
@@ -131,9 +137,14 @@ async def checkGameVersions(client: Client):
                         while patchLength != 0:
                             if (patchLength < 1999):
                                 chunk = patchNotes
+                                patchNotes = patchNotes[1999::]
                             else: 
-                                chunk = patchNotes[0:1999]
-                            patchNotes = patchNotes[1999::]
+                                tempChunk = patchNotes[0:1999]
+                                place = tempChunk.rfind("\n")
+                                if place == -1:
+                                    place = 1999
+                                chunk = patchNotes[0:place]
+                                patchNotes = patchNotes[place::]
                             patchLength = len(patchNotes)
                             await thread.send(chunk)
                             await asyncio.sleep(0)
