@@ -41,6 +41,7 @@ from commands.help import helpHandler
 from commands.summary import handleSummary
 from commands.gym import handleDailyGym, handleGymOptIn, sendGymMessage, handleGym
 from commands.gameSubscription import subscribe, checkGameVersions
+from commands.play import handlePlay
 from helpers.reminders import handleReminderCheck, addReminder,handleReminderAdd
 
 @client.event
@@ -144,6 +145,10 @@ async def ping_command(interaction: discord.Interaction,vc:str, message:str):
 @app_commands.autocomplete(hero=auto_complete)
 async def first_commant(interaction: discord.Interaction,hero:str):
     await guessHero(interaction=interaction, hero=hero)
+
+@tree.command(name="play",description="Play music from spotify", guild=None)
+async def first_commant(interaction: discord.Interaction):
+    await handlePlay(interaction=interaction)
 
 
 @client.event

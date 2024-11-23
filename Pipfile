@@ -26,6 +26,8 @@ matplotlib = "*"
 numpy = "*"
 opencv-python = "*"
 tqdm = "*"
+pyaudio = "*"
+pynacl = "*"
 
 [dev-packages]
 
