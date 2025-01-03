@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Spotify Headless</title>
+    <style>
+      form {
+        margin: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Spotify Headless</h1>
+    <form action="/api/prev" method="post">
+      <input type="submit" value="Previous" />
+    </form>
+    <form action="/api/play-pause" method="post">
+      <input type="submit" value="Play/Pause" />
+    </form>
+    <form action="/api/next" method="post">
+      <input type="submit" value="Next" />
+    </form>
+    <form action="/api/reset" method="post">
+      <input type="submit" value="Reset server" />
+    </form>
+  </body>
+</html>

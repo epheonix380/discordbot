@@ -1,47 +1,20 @@
+import io
+import subprocess
 import discord
 import os
-import io
+from dotenv import load_dotenv
 import time
-import subprocess
-
-# Specify the path and name of the named pipe
-pipe_path = "./spotify-headless-client/WPIPE"
-
-
-class Test(io.RawIOBase):
-
-    # The following methods can return None if the file is in non-blocking mode
-    # and no data is available.
-    def read(self, size: int = -1, /) -> bytes:
-       with open(pipe_path, 'rb') as f:
-          return f.read(size)
-
-   
-
-# Read data from the named pipe
-
+load_dotenv()
+ # init command
 def play(vc: discord.VoiceClient):
-    # Create "named pipes".
-    
-    # Open FFmpeg as sub-process
-    # Use two audio input streams:
-    # 1. Named pipe: "audio_pipe1"
-    # 2. Named pipe: "audio_pipe2"
-    # Merge the two audio streams using amix audio filter.
-    # Store the result to output file: output.mp3
-    pipe = Test()
-    #test = io.BufferedReader(pipe)
-     # 5 seconds of audio as buffer
-    test = io.open(pipe_path, "rb") #io.BufferedReader(pipe)
+
+    ffmpegCommand = f'cd spotify && npm start | ffmpeg -re -i pipe:0 -ac 2 -ar 48000 -f s16le -acodec pcm_s16le pipe:1'
+    ffmpegPipe = subprocess.Popen(ffmpegCommand,
+                                  shell=True,
+                                  stdout=subprocess.PIPE,
+                                  bufsize=2097152) # 10 seconds of audio @1600kbit/s as buffer
+    test = io.BufferedReader(ffmpegPipe.stdout)
+    time.sleep(5) # 5 seconds of audio as buffer
     source = discord.PCMVolumeTransformer(discord.PCMAudio(stream=test))
-    print("3")
-
     vc.play(source=source)
-    print("4")
-
-
-def close_audio(pa, s):
-  print ("close_audio: Closing stream")
-  s.close()
-  print ("close_audio: Terminating PyAudio Object")
-  pa.terminate()
+    return ffmpegPipe

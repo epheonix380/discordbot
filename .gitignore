@@ -5,8 +5,9 @@
 /temp
 /systemCache
 /target
-*.json
 *.gif
 *.jpg
 *.jpeg
 *.mp4
+*/node_modules
+*/node_modules/**
