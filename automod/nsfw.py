@@ -50,18 +50,18 @@ async def handle_nsfw(message: discord.Message):
             img_data = requests.get(thing.url).content
             with open(f"SPOILER_{i}_{thing.filename}", "wb") as handler:
                 handler.write(img_data)
-            obj = nude_detector.detect(f"SPOILER_{i}_{thing.filename}")
-            print(obj)
-            if check_conditions(obj, isDom=str(message.author.id) == "226315767564599297"):
-                nsfw_count = nsfw_count + 1
-                trigger = trigger and False
-                files.append(discord.File(f"SPOILER_{i}_{thing.filename}"))
-            else:
-                with open(f"{i}_{thing.filename}", "wb") as handler:
-                    handler.write(img_data)
-                    files.append(discord.File(f"{i}_{thing.filename}"))
-                    trigger = trigger and True
-            i = i+1
+                obj = nude_detector.detect(f"SPOILER_{i}_{thing.filename}")
+                print(obj)
+                if check_conditions(obj, isDom=str(message.author.id) == "226315767564599297"):
+                    nsfw_count = nsfw_count + 1
+                    trigger = trigger and False
+                    files.append(discord.File(f"SPOILER_{i}_{thing.filename}"))
+                else:
+                    with open(f"{i}_{thing.filename}", "wb") as handler:
+                        handler.write(img_data)
+                        files.append(discord.File(f"{i}_{thing.filename}"))
+                        trigger = trigger and True
+                i = i+1
         except:
             continue
     for embed in message.embeds:
@@ -69,20 +69,20 @@ async def handle_nsfw(message: discord.Message):
             img_data = requests.get(embed.url).content
             with open(f"SPOILER_{i}_{thing.filename}", "wb") as handler:
                 handler.write(img_data)
-            obj = nude_detector.detect(f"SPOILER_{i}_{thing.filename}")
-            print(obj)
+                obj = nude_detector.detect(f"SPOILER_{i}_{thing.filename}")
+                print(obj)
 
-            if check_conditions(obj, isDom=str(message.author.id) == "226315767564599297"):
-                nsfw_count = nsfw_count + 1
-                containsEmbeds = True
-                trigger = trigger and False
-                files.append(discord.File(f"SPOILER_{i}_{thing.filename}"))
-            else:
-                with open(f"{i}_{thing.filename}", "wb") as handler:
-                    handler.write(img_data)
-                    files.append(discord.File(f"{i}_{thing.filename}"))
-                    trigger = trigger and True
-            i=i+1
+                if check_conditions(obj, isDom=str(message.author.id) == "226315767564599297"):
+                    nsfw_count = nsfw_count + 1
+                    containsEmbeds = True
+                    trigger = trigger and False
+                    files.append(discord.File(f"SPOILER_{i}_{thing.filename}"))
+                else:
+                    with open(f"{i}_{thing.filename}", "wb") as handler:
+                        handler.write(img_data)
+                        files.append(discord.File(f"{i}_{thing.filename}"))
+                        trigger = trigger and True
+                i=i+1
         except Exception as e:
             print(str(e))
             continue
@@ -116,20 +116,20 @@ async def handel_regex_nsfw(message):
                 img_data = requests.get(str(match.group(0))).content
                 with open(f"SPOILER_{i}.png", "wb") as handler:
                     handler.write(img_data)
-                obj = nude_detector.detect(f"SPOILER_{i}.png")
-                print(obj)
+                    obj = nude_detector.detect(f"SPOILER_{i}.png")
+                    print(obj)
 
-                if check_conditions(obj, isDom=str(message.author.id) == "226315767564599297"):
-                    nsfw_count = nsfw_count + 1
-                    containsEmbeds = True
-                    trigger = trigger and False
-                    files.append(discord.File(f"SPOILER_{i}.png"))
-                else:
-                    with open(f"{i}.png", "wb") as handler:
-                        handler.write(img_data)
-                        files.append(discord.File(f"{i}.png"))
-                        trigger = trigger and True
-                i=i+1
+                    if check_conditions(obj, isDom=str(message.author.id) == "226315767564599297"):
+                        nsfw_count = nsfw_count + 1
+                        containsEmbeds = True
+                        trigger = trigger and False
+                        files.append(discord.File(f"SPOILER_{i}.png"))
+                    else:
+                        with open(f"{i}.png", "wb") as handler:
+                            handler.write(img_data)
+                            files.append(discord.File(f"{i}.png"))
+                            trigger = trigger and True
+                    i=i+1
         except Exception as e:
             print(str(e))
             continue
