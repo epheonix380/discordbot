@@ -3,14 +3,16 @@ import requests
 import re
 from nudity import NudeDetector
 
-def check_conditions(labels):
+def check_conditions(labels, isDom = False):
+    if isDom:
+        return True
     for label in labels:
         if label["class"] == "BELLY_EXPOSED":
             if label["score"] > 0.75:
                 print("BELLY_EXPOSED")
                 return True
         if label["class"] == "FEMALE_GENITALIA_COVERED":
-            if label["score"] > 0.99:
+            if label["score"] > 0.75:
                 print("FEMALE_GENITALIA_COVERED")
                 return True
         if label["class"] == "BUTTOCKS_EXPOSED":
@@ -50,7 +52,7 @@ async def handle_nsfw(message: discord.Message):
                 handler.write(img_data)
                 obj = nude_detector.detect(f"SPOILER_{i}_{thing.filename}")
                 print(obj)
-                if check_conditions(obj):
+                if check_conditions(obj, isDom=str(message.author.id) == "226315767564599297"):
                     nsfw_count = nsfw_count + 1
                     trigger = trigger and False
                     files.append(discord.File(f"SPOILER_{i}_{thing.filename}"))
@@ -70,7 +72,7 @@ async def handle_nsfw(message: discord.Message):
                 obj = nude_detector.detect(f"SPOILER_{i}_{thing.filename}")
                 print(obj)
 
-                if check_conditions(obj):
+                if check_conditions(obj, isDom=str(message.author.id) == "226315767564599297"):
                     nsfw_count = nsfw_count + 1
                     containsEmbeds = True
                     trigger = trigger and False
@@ -117,7 +119,7 @@ async def handel_regex_nsfw(message):
                     obj = nude_detector.detect(f"SPOILER_{i}.png")
                     print(obj)
 
-                    if check_conditions(obj):
+                    if check_conditions(obj, isDom=str(message.author.id) == "226315767564599297"):
                         nsfw_count = nsfw_count + 1
                         containsEmbeds = True
                         trigger = trigger and False
