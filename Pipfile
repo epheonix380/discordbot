@@ -20,8 +20,6 @@ xlsxwriter = "*"
 apscheduler = "*"
 fuzzyfinder = "*"
 pynacl = "*"
-opencv-python-headless = "*"
-numpy = "*"
 
 [dev-packages]
 
