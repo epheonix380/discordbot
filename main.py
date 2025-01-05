@@ -127,10 +127,6 @@ async def pingVoiceChannel(interaction:discord.Interaction, vc:str, message:str)
     content += "\n" + message
     await interaction.channel.send(content=content)
 
-@tree.command(name="test",description="This is a test command", guild=None)
-async def first_commant(interaction: discord.Interaction):
-    await interaction.response.send_message("Test")
-
 @tree.command(name="hero",description="Register a hero for guess the hero", guild=None)
 @app_commands.autocomplete(hero=auto_complete)
 async def first_commant(interaction: discord.Interaction,hero:str):
@@ -161,7 +157,6 @@ async def tick():
     print("Tick!")
     await checkGameVersions(client=client)
     #await handleReminderCheck(client=client)
-
 
 scheduler = AsyncIOScheduler()
 scheduler.add_job(tick, 'interval', minutes=5)

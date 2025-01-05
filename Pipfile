@@ -22,10 +22,6 @@ xlsxwriter = "*"
 apscheduler = "*"
 fuzzyfinder = "*"
 keras = "*"
-matplotlib = "*"
-numpy = "*"
-opencv-python = "*"
-tqdm = "*"
 
 [dev-packages]
 
