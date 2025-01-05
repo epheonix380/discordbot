@@ -6,6 +6,7 @@ const { launch, getStream } = require("puppeteer-stream");
 let browser = null;
 let page = null;
 let access_token = null;
+const port = process.env.PORT || 5000;
 
 // Read config
 const deviceName = config.get("deviceName");
@@ -83,7 +84,7 @@ const connect = async (getToken) => {
   }
 
   access_token = getToken();
-  await page.goto("http://localhost:5000/play");
+  await page.goto(`http://localhost:${port}/play`);
   await page.waitForSelector(".ready");
 
   // Do not use static token

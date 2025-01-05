@@ -2,7 +2,7 @@ const express = require("express");
 const player = require("./components/player.js");
 const auth = require("./components/auth.js");
 
-const port = process.env.PORT || 5006;
+const port = process.env.PORT || 5000;
 
 const app = express();
 

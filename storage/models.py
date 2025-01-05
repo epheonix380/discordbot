@@ -67,6 +67,7 @@ class Member(models.Model):
     isGym = models.BooleanField(default=False)
     gymCheckinTime = models.TimeField(default=datetime.time(hour=22))
     lastGymCheckinDate = models.DateField(default=datetime.datetime.now().date())
+    spotify = models.CharField(max_length=1024, default="{}")
 
 class MemberPlaylist(models.Model):
     member_id = models.ForeignKey(Member, on_delete=models.CASCADE)
