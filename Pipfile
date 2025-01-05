@@ -10,7 +10,6 @@ python-dotenv = "*"
 django = "*"
 pytz = "*"
 dj-database-url = "*"
-opencv-python-headless = "*"
 pydload = "*"
 scikit-image = "*"
 psycopg2 = "*"
@@ -23,6 +22,7 @@ apscheduler = "*"
 fuzzyfinder = "*"
 keras = "*"
 pynacl = "*"
+opencv-python = "*"
 
 [dev-packages]
 
