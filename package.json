@@ -1,0 +1,15 @@
+{
+  "dependencies": {
+    "axios": "^1.7.7",
+    "config": "^3.3.12",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "puppeteer": "^23.9.0",
+    "puppeteer-stream": "^3.0.19",
+    "store": "^2.0.12"
+  },
+  "scripts": {
+    "dev": "nodemon --inspect spotify/src/app.js",
+    "start": "node spotify/src/app.js"
+  }
+}
