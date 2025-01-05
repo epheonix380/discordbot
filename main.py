@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from django.conf import settings
 import os
 import re
-from automod.nsfw import handle_nsfw, handel_regex_nsfw
+#from automod.nsfw import handle_nsfw, handel_regex_nsfw
 from backend import brocken as notSettings
 from typing import List
 import json
@@ -68,11 +68,11 @@ async def on_message(message: discord.Message):
         return
     nsfwChannel = await getNSFWChannel(message.guild.id)
     is_nsfw = 0
-    if (nsfwChannel is None or str(nsfwChannel)[2:-1:1] != str(message.channel.id)):
-        if message.attachments: #or len(message.embeds)>0:
-            is_nsfw = await handle_nsfw(message)
-        elif len(arr) != 0:
-            is_nsfw = await handel_regex_nsfw(message)
+    #if (nsfwChannel is None or str(nsfwChannel)[2:-1:1] != str(message.channel.id)):
+    #    if message.attachments: #or len(message.embeds)>0:
+    #        is_nsfw = await handle_nsfw(message)
+    #    elif len(arr) != 0:
+    #        is_nsfw = await handel_regex_nsfw(message)
     guessTheHeroChannel = await getGuessTheHeroChannel(message.guild.id)
     if (guessTheHeroChannel is not None and str(guessTheHeroChannel)[2:-1:1] == str(message.channel.id)):
         await guessTheHeroHandler(message=message)
