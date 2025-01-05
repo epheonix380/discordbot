@@ -11,7 +11,6 @@ django = "*"
 pytz = "*"
 dj-database-url = "*"
 pydload = "*"
-scikit-image = "*"
 psycopg2 = "*"
 djangorestframework = "*"
 markdown = "*"
@@ -20,9 +19,8 @@ requests = "*"
 xlsxwriter = "*"
 apscheduler = "*"
 fuzzyfinder = "*"
-keras = "*"
 pynacl = "*"
-opencv-python = "*"
+opencv-python-headless = "*"
 
 [dev-packages]
 
