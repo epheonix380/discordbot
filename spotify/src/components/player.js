@@ -1,5 +1,6 @@
 const puppeteer = require("puppeteer");
 const config = require("config");
+const fs = require("fs");
 const { launch, getStream } = require("puppeteer-stream");
 
 let browser = null;
@@ -132,7 +133,11 @@ const connect = async (getToken) => {
       }
     });
   });
-  const stream = await getStream(page, { audio: true, video: true });
+  // this will pipe the stream to ffmpeg and convert the webm to mkv format (which supports vp8/vp9)
+  const stream = await getStream(page, {
+    audio: true,
+    video: false,
+  });
 
   stream.pipe(process.stdout);
 };
