@@ -41,6 +41,14 @@ class GameVersionSubscriptions(models.Model):
     game = models.ForeignKey(GameVersion, on_delete=models.CASCADE)
     channel = models.ForeignKey(Channel, on_delete=models.CASCADE)
 
+class GuildMealPrepping(models.Model):
+    guild = models.ForeignKey(Guild, on_delete=models.CASCADE)
+    channel = models.ForeignKey(Channel, on_delete=models.CASCADE)
+    day_of_week = models.CharField(max_length=3, default="mon")
+    carbs = models.CharField(max_length=2048, default="Rice, Pasta, Noodle, Bread, Potato, Any, None of them")
+    protein = models.CharField(max_length=2048, default="Beef, Pork, Chicken, Vegetarian, seafood, Safe, Beef, Pork, Chicken, seafood")
+    bad = models.CharField(max_length=2048, default="color is red, budget it 5 bucks, safe, color is green, Cant use stove, safe, Must have dairy, Include a dessert, Safe")
+
 class GuildActivity(models.Model):
     guild = models.ForeignKey(Guild, on_delete=models.CASCADE)
     date = models.DateField(auto_now_add=True)
@@ -67,6 +75,18 @@ class Member(models.Model):
     isGym = models.BooleanField(default=False)
     gymCheckinTime = models.TimeField(default=datetime.time(hour=22))
     lastGymCheckinDate = models.DateField(default=datetime.datetime.now().date())
+
+class MemberMealPrepperMap(models.Model):
+    member_id = models.ForeignKey(Member, on_delete=models.CASCADE)
+    meal_prep = models.ForeignKey(GuildMealPrepping, on_delete=models.CASCADE)
+
+class MMPMWeek(models.Model):
+    mmpm = models.ForeignKey(MemberMealPrepperMap, on_delete=models.CASCADE)
+    week = models.DateField()
+    retries = models.IntegerField(default=0)
+    carb = models.CharField(max_length=64, default="")
+    protein = models.CharField(max_length=64, default="")
+    bad = models.CharField(max_length=64, default="")
 
 class MemberPlaylist(models.Model):
     member_id = models.ForeignKey(Member, on_delete=models.CASCADE)

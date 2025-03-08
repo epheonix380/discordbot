@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Channel,GameVersionSubscriptions,GameVersion,Member,MemberGymDay,MemberReminder, MemberTimeZoneMap, TimeZone, Item, GuildActivity, MemberGuildActivity, WeightedGuildActivity
+from .models import Channel,GameVersionSubscriptions,GameVersion,Member,MemberGymDay,MemberReminder, MemberTimeZoneMap, TimeZone, Item, GuildActivity, MemberGuildActivity, WeightedGuildActivity, GuildMealPrepping, MemberMealPrepperMap, MMPMWeek
 
 class ItemSerializer(serializers.ModelSerializer):
     class Meta:
@@ -79,4 +79,6 @@ class GameSubscriptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = GameVersionSubscriptions
         fields = ['game', 'channel']
+
+
     
