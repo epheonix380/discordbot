@@ -12,7 +12,7 @@ def getGuildMealPrep(guild_id):
         return None
 
 @sync_to_async
-def setGuildMealPrep(guild_id, channel_id, day_of_week, carbs, protein, bad):
+def setGuildMealPrep(guild_id, channel_id, day_of_week=None, carbs=None, protein=None, bad=None):
 
     update_defaults = {}
     create_defaults = {
