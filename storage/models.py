@@ -42,9 +42,10 @@ class GameVersionSubscriptions(models.Model):
     channel = models.ForeignKey(Channel, on_delete=models.CASCADE)
 
 class GuildMealPrepping(models.Model):
-    guild = models.ForeignKey(Guild, on_delete=models.CASCADE)
+    guild = models.ForeignKey(Guild, on_delete=models.CASCADE, unique=True)
     channel = models.ForeignKey(Channel, on_delete=models.CASCADE)
     day_of_week = models.CharField(max_length=3, default="mon")
+    retries = models.IntegerField(default=1)
     carbs = models.CharField(max_length=2048, default="Rice, Pasta, Noodle, Bread, Potato, Any, None of them")
     protein = models.CharField(max_length=2048, default="Beef, Pork, Chicken, Vegetarian, seafood, Safe, Beef, Pork, Chicken, seafood")
     bad = models.CharField(max_length=2048, default="color is red, budget it 5 bucks, safe, color is green, Cant use stove, safe, Must have dairy, Include a dessert, Safe")

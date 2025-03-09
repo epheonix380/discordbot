@@ -80,5 +80,38 @@ class GameSubscriptionSerializer(serializers.ModelSerializer):
         model = GameVersionSubscriptions
         fields = ['game', 'channel']
 
+class MemberMealPrepperMapSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MemberMealPrepperMap
+        fields = ['member_id']
+
+class GuildMealPrepperSerializer(serializers.ModelSerializer):
+    members = MemberMealPrepperMapSerializer(read_only=True, many=True)
+    class Meta:
+        model = GuildMealPrepping
+        fields = ['channel', 'day_of_week', 'carbs', 'protein', 'bad', 'members']
+
+class GuildMealPrepperStandardSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GuildMealPrepping
+        fields = "__all__"
+
+class MMPMStandardSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = MMPMWeek
+        fields = "__all__"
+
+class MemberMealPrepSerializer(serializers.ModelSerializer):
+    meal_prep = GuildMealPrepperStandardSerializer(read_only=True)
+    mmpm = serializers.SerializerMethodField()
+
+    def get_mmpm(self, instance):
+        cars = instance.MMPMWeek.all().order_by("-week")
+        return MMPMStandardSerializer(cars[0,5], many=True).data
+    class Meta: 
+        model = MemberMealPrepperMap
+        fields = ['member_id', 'meal_prep', 'mmpm']
+    
 
     
