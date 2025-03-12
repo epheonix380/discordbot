@@ -31,6 +31,7 @@ class ChannelCategories(models.IntegerChoices):
     NSFW = 1, "NSFW"
     GTH = 2, "Guess The Hero"
     SUMMARY_IGNORE = 3, "Summary Ignore"
+    MEAL_PREP = 4, "Meal prep"
 
 class Channel(models.Model):
     guild = models.ForeignKey(Guild, on_delete=models.CASCADE)
@@ -42,9 +43,9 @@ class GameVersionSubscriptions(models.Model):
     channel = models.ForeignKey(Channel, on_delete=models.CASCADE)
 
 class GuildMealPrepping(models.Model):
-    guild = models.ForeignKey(Guild, on_delete=models.CASCADE, unique=True)
+    guild = models.ForeignKey(Guild, on_delete=models.CASCADE)
     channel = models.ForeignKey(Channel, on_delete=models.CASCADE)
-    day_of_week = models.CharField(max_length=3, default="mon")
+    day_of_week = models.CharField(max_length=6, default="mon")
     retries = models.IntegerField(default=1)
     carbs = models.CharField(max_length=2048, default="Rice, Pasta, Noodle, Bread, Potato, Any, None of them")
     protein = models.CharField(max_length=2048, default="Beef, Pork, Chicken, Vegetarian, seafood, Safe, Beef, Pork, Chicken, seafood")

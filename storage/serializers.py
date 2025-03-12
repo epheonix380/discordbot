@@ -106,9 +106,9 @@ class MemberMealPrepSerializer(serializers.ModelSerializer):
     meal_prep = GuildMealPrepperStandardSerializer(read_only=True)
     mmpm = serializers.SerializerMethodField()
 
-    def get_mmpm(self, instance):
-        cars = instance.MMPMWeek.all().order_by("-week")
-        return MMPMStandardSerializer(cars[0,5], many=True).data
+    def get_mmpm(self, memberMealPrepperMap):
+        mmps = MMPMWeek.objects.filter(mmpm=memberMealPrepperMap).order_by("-week")
+        return MMPMStandardSerializer(mmps, many=True).data
     class Meta: 
         model = MemberMealPrepperMap
         fields = ['member_id', 'meal_prep', 'mmpm']

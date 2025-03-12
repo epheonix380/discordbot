@@ -41,6 +41,7 @@ from commands.help import helpHandler
 from commands.summary import handleSummary
 from commands.gym import handleDailyGym, handleGymOptIn, sendGymMessage, handleGym
 from commands.gameSubscription import subscribe, checkGameVersions
+from commands.meal_prep import statusCheck, subscribeToMealPrep, createGuildMealPlan, forceDoRoll
 from helpers.reminders import handleReminderCheck, addReminder,handleReminderAdd
 
 @client.event
@@ -94,6 +95,22 @@ async def on_message(message: discord.Message):
         await handleSummary(message=message)
     elif message.content.startswith(",remind"):
         await handleReminderAdd(message=message)
+    elif message.content.startswith(",status"):
+        await statusCheck(message=message)
+    elif message.content.startswith(",mealprep"):
+        second = message.content.split(" ")[1]
+        print(second)
+        print(message)
+        if second == "create":
+            await createGuildMealPlan(message=message)
+        elif second == "subscribe":
+            await subscribeToMealPrep(message=message)
+        elif second == "status":
+            await statusCheck(message=message)
+        elif second == "force":
+            await forceDoRoll(message=message, context=client)
+        else:
+            await message.channel.send("Unknown command")
     elif message.content.startswith(",subscribe"):
         await subscribe(message=message)
     elif message.content.startswith(",test") and (str(message.author.id)) == "218174413604913152":

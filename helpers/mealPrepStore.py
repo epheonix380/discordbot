@@ -1,4 +1,4 @@
-from storage.models import GuildMealPrepping, MemberMealPrepperMap, Member, MMPMWeek
+from storage.models import GuildMealPrepping, MemberMealPrepperMap, Member, MMPMWeek, Guild, Channel, ChannelCategories
 from storage.serializers import GuildMealPrepperSerializer, MemberMealPrepSerializer
 from asgiref.sync import sync_to_async
 
@@ -12,46 +12,30 @@ def getGuildMealPrep(guild_id):
         return None
 
 @sync_to_async
-def setGuildMealPrep(guild_id, channel_id, day_of_week=None, carbs=None, protein=None, bad=None):
-
-    update_defaults = {}
-    create_defaults = {
-        "channel_id":channel_id,
-        "day_of_week": "mon",
-        "carbs": "Rice, Pasta, Noodle, Bread, Potato, Any, None of them",
-        "protein": "Beef, Pork, Chicken, Vegetarian, seafood, Safe, Beef, Pork, Chicken, seafood",
-        "bad": "color is red, budget it 5 bucks, safe, color is green, Cant use stove, safe, Must have dairy, Include a dessert, Safe"
-    }
-    if channel_id is not None:
-        update_defaults['channel_id'] = channel_id
-        create_defaults['channel_id'] = channel_id
-    if day_of_week is not None:
-        update_defaults['day_of_week'] = day_of_week
-        create_defaults['day_of_week'] = day_of_week
-    if carbs is not None:
-        update_defaults['carbs'] = carbs
-        create_defaults['carbs'] = carbs
-    if protein is not None:
-        update_defaults['protein'] = protein
-        create_defaults['protein'] = protein
-    if bad is not None:
-        update_defaults['bad'] = bad
-        create_defaults['bad'] = bad
-    obj, isCreate = GuildMealPrepping.objects.update_or_create(
-        guild_id=guild_id, 
-        defaults=update_defaults,
-        create_defaults=create_defaults)
+def setGuildMealPrep(guild_id, channel_id, day_of_week=None, retries=None, carbs=None, protein=None, bad=None):
+    try:
+        guild, isCreate = Guild.objects.get_or_create(guild_id=guild_id)
+        channel, isChannelNew = Channel.objects.get_or_create(channel_id=channel_id, guild=guild, defaults={
+            "category": ChannelCategories.MEAL_PREP
+        })
+        obj = GuildMealPrepping(guild=guild, channel=channel)
+        obj.save()
+        return True
+    except:
+        return False
 
 @sync_to_async
-def createForAllMembers(guild_id: str, createFunc: function):
+def createForAllMembers(guild_id: str, createFunc):
     gmp = GuildMealPrepping.objects.filter(guild__guild_id=guild_id).first()
     if gmp is not None:
         mmpm = MemberMealPrepperMap.objects.filter(meal_prep=gmp)
+        success = []
         for member in mmpm:
             week, retries, carb, protein, bad = createFunc(gmp.day_of_week, gmp.retries, gmp.carbs, gmp.protein, gmp.bad)
-            MMPMWeek.objects.create(mmpm=mmpm, week=week, retries=retries, carb=carb, protein=protein, bad=bad)
-        return True
-    return False
+            MMPMWeek.objects.create(mmpm=member, week=week, retries=retries, carb=carb, protein=protein, bad=bad)
+            success.append(member.member_id)
+        return [gmp.guild.guild_id, gmp.channel.channel_id, success]
+    return [gmp.guild.guild_id, gmp.channel.channel_id,[]]
 
 # 
 @sync_to_async
@@ -62,7 +46,7 @@ def getMemberMealPrep(member_id):
 
 @sync_to_async
 def getMemberMealPrepInGuild(member_id, guild_id):
-    guild_meal = GuildMealPrepping.objects.filter(guild__guild_id = guild_id).first()
+    guild_meal = GuildMealPrepping.objects.filter(guild__guild_id=guild_id).first()
     if guild_meal is not None:
         qs = MemberMealPrepperMap.objects.filter(member_id__member_id = member_id, meal_prep=guild_meal).first()
         data = MemberMealPrepSerializer(qs).data
