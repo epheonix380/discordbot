@@ -5,7 +5,35 @@ from nudity import NudeDetector
 
 def check_conditions(labels, isDom = False):
     if isDom:
-        return True
+        for label in labels:
+            if label["class"] == "BELLY_EXPOSED":
+                if label["score"] > 0.4:
+                    print("BELLY_EXPOSED")
+                    return True
+            if label["class"] == "FEMALE_GENITALIA_COVERED":
+                if label["score"] > 0.4:
+                    print("FEMALE_GENITALIA_COVERED")
+                    return True
+            if label["class"] == "BUTTOCKS_EXPOSED":
+                if label["score"] > 0.3:
+                    print("BUTTOCKS_EXPOSED")
+                    return True
+            if label["class"] == "FEMALE_BREAST_EXPOSED":
+                if label["score"] > 0.3:
+                    print("FEMALE_BREAST_EXPOSED")
+                    return True
+            if label["class"] == "FEMALE_GENITALIA_EXPOSSED":
+                if label["score"] > 0.3:
+                    print("FEMALE_GENITALIA_EXPOSSED")
+                    return True
+            if label["class"] == "ANUS_EXPOSED":
+                if label["score"] > 0.3:
+                    print("ANUS_EXPOSED")
+                    return True
+            if label["class"] == "MALE_GENITALIA_EXPOSED":
+                if label["score"] > 0.3:
+                    print("MALE_GENITALIA_EXPOSED")
+                    return True
     for label in labels:
         if label["class"] == "BELLY_EXPOSED":
             if label["score"] > 0.5:
