@@ -81,6 +81,7 @@ async def checkGameVersions(client: Client):
                 await asyncio.sleep(0)
                 for channel in channels:
                     await asyncio.sleep(0)
+                    localPatchNotes = patchNotes[:]
                     channel_id = channel["channel"]["channel_id"]
                     guild_id = channel["channel"]["guild"]
                     guild: discord.Guild = await client.fetch_guild(guild_id)
@@ -101,7 +102,7 @@ async def checkGameVersions(client: Client):
                                 return ""
                         def imgFunction(matchobj: re.Match):
                             return ""
-                        if (patchNotes != ""):
+                        if (localPatchNotes != ""):
                             await asyncio.sleep(0)
                             patchNotes = patchNotes.replace(
                                     "[b]", "*"
@@ -119,33 +120,34 @@ async def checkGameVersions(client: Client):
                                     "[/list]", ""
                                 )
                             await asyncio.sleep(0)
-                            patchNotes = re.sub(
+                            localPatchNotes = re.sub(
                                 "\[url=[\s\S]+?\[\/url\]",
                                 urlFunction,
-                                patchNotes
+                                localPatchNotes
                             )
                             await asyncio.sleep(0)
-                            patchNotes = re.sub(
+                            localPatchNotes = re.sub(
                                 "\[img\][\s\S]+?\[\/img\]",
                                 imgFunction,
-                                patchNotes
+                                localPatchNotes
                             )
                         await asyncio.sleep(0)
-                        patchLength = len(patchNotes)
+                        patchLength = len(localPatchNotes)
                         thread: Thread = await sentMessage.create_thread(name=f"Patch Notes for Game: {game['name']} with buildId: {buildid}")
                         await asyncio.sleep(0)
                         while patchLength != 0:
                             if (patchLength < 1999):
-                                chunk = patchNotes
-                                patchNotes = patchNotes[1999::]
+                                chunk = localPatchNotes
+                                localPatchNotes = localPatchNotes[1999::]
                             else: 
-                                tempChunk = patchNotes[0:1999]
+                                tempChunk = localPatchNotes[0:1999]
                                 place = tempChunk.rfind("\n")
                                 if place == -1:
                                     place = 1999
-                                chunk = patchNotes[0:place]
-                                patchNotes = patchNotes[place::]
-                            patchLength = len(patchNotes)
+                                chunk = localPatchNotes[0:place]
+                                localPatchNotes = localPatchNotes[place::]
+                            patchLength = len(localPatchNotes)
                             await thread.send(chunk)
                             await asyncio.sleep(0)
+
 
