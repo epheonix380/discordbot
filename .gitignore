@@ -9,3 +9,7 @@
 *.jpg
 *.jpeg
 *.mp4
+/site-packages
+/__pycache__
+*/__pycache__
+**/*/__pycache__

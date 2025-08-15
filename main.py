@@ -3,8 +3,8 @@ from threading import Thread
 from datetime import datetime, timezone, timedelta
 import time
 import pytz
-import asyncio
 from asgiref.sync import async_to_sync
+import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from discord import app_commands
 from dotenv import load_dotenv
@@ -154,17 +154,35 @@ async def on_ready():
     print("Ready!")
 
 async def tick():
+    """
+    This function will be called every 5 minutes by the scheduler.
+    """
+    # The commented lines are kept to show where your original functions would go.
     # await handleDailyGym(client=client)
     print("Tick!")
     await checkGameVersions(client=client)
-    #await handleReminderCheck(client=client)
+    # await handleReminderCheck(client=client)
 
+async def main():
+    """
+    The main asynchronous function that sets up the scheduler and starts the bot.
+    """
+    # Create the AsyncIOScheduler instance.
+    scheduler = AsyncIOScheduler()
+    
+    # Add the tick function to the scheduler to run at a 5-minute interval.
+    scheduler.add_job(tick, 'interval', minutes=5)
+    
+    # Start the scheduler.
+    scheduler.start()
+    
+    # Start the discord bot.
+    await client.start(TOKEN)
 
-scheduler = AsyncIOScheduler()
-scheduler.add_job(tick, 'interval', minutes=5)
-scheduler.start()
-loop = asyncio.get_event_loop()
-loop.create_task(client.start(TOKEN))
-loop.run_forever()
-
+# The new standard way to run an asyncio program in Python 3.13.
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("Program closed by user.")
 
