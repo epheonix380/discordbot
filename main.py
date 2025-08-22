@@ -7,9 +7,11 @@ from asgiref.sync import async_to_sync
 import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from discord import app_commands
+from discord.ext import tasks, commands
 from dotenv import load_dotenv
 from django.conf import settings
 import os
+import shutil
 import re
 from automod.nsfw import handle_nsfw, handel_regex_nsfw
 from backend import brocken as notSettings
@@ -147,12 +149,7 @@ async def ping_command(interaction: discord.Interaction,vc:str, message:str):
 async def first_commant(interaction: discord.Interaction,hero:str):
     await guessHero(interaction=interaction, hero=hero)
 
-
-@client.event
-async def on_ready():
-    list = await tree.sync(guild=None)
-    print("Ready!")
-
+@tasks.loop(minutes=5) # Schedule for 9:00 AM UTC
 async def tick():
     """
     This function will be called every 5 minutes by the scheduler.
@@ -163,26 +160,33 @@ async def tick():
     await checkGameVersions(client=client)
     # await handleReminderCheck(client=client)
 
-async def main():
-    """
-    The main asynchronous function that sets up the scheduler and starts the bot.
-    """
-    # Create the AsyncIOScheduler instance.
-    scheduler = AsyncIOScheduler()
-    
-    # Add the tick function to the scheduler to run at a 5-minute interval.
-    scheduler.add_job(tick, 'interval', minutes=5)
-    
-    # Start the scheduler.
-    scheduler.start()
-    
-    # Start the discord bot.
-    await client.start(TOKEN)
 
-# The new standard way to run an asyncio program in Python 3.13.
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("Program closed by user.")
 
+@tasks.loop(hours=1) # Schedule for 9:00 AM UTC
+async def clear_temp_folder_contents():
+    """
+    Deletes all files and subdirectories within a specified folder,
+    but keeps the folder itself.
+
+    Args:
+        folder_path (str): The path to the folder.
+    """
+    folder_path = "./temp"
+    for filename in os.listdir(folder_path):
+        file_path = os.path.join(folder_path, filename)
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+        except Exception as e:
+            print(f'Failed to delete {file_path}. Reason: {e}')
+
+@client.event
+async def on_ready():
+    clear_temp_folder_contents.start()
+    tick.start()
+    list = await tree.sync(guild=None)
+    print("Ready!")
+
+client.run(TOKEN)

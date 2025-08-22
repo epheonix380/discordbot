@@ -12,7 +12,9 @@ https://docs.djangoproject.com/en/4.0/ref/settings/
 
 from pathlib import Path
 import dj_database_url
+from dotenv import load_dotenv
 import os
+load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -95,7 +97,9 @@ DATABASES = {
 }
 if (DEBUG==False):
     print("ACTIVATION")
-    db_from_env = dj_database_url.config(conn_max_age=600)
+    db_from_env = dj_database_url.config(
+        default=os.environ.get("DATABASE_URL"),
+        conn_max_age=600)
     DATABASES['default'].update(db_from_env)
 
 # Password validation

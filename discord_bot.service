@@ -1,0 +1,14 @@
+[Unit]
+Description=Python discord bot
+After=network.target
+
+[Service]
+ExecStart=/root/discordbot/discordBot/bin/python3.13 /root/discordbot/main.py
+WorkingDirectory=/root/discordbot
+Restart=always
+RestartSec=10
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target
