@@ -145,3 +145,15 @@ class Item(models.Model):
 class BotIgnoreChannels(models.Model):
     channel_id = models.CharField(max_length=24, unique=True)
     guild = models.ForeignKey(Guild, on_delete=models.CASCADE)
+
+class SpotifyToken(models.Model):
+    member = models.ForeignKey(Member, on_delete=models.CASCADE)
+    access_token = models.TextField()
+    refresh_token = models.TextField()
+    expires_at = models.DateTimeField()
+    scope = models.TextField(default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['member']

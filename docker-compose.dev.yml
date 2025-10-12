@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database for Development
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-discord_bot_dev}
+      POSTGRES_USER: ${POSTGRES_USER:-bot_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_password}
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    networks:
+      - internal
+    restart: unless-stopped
+    ports:
+      - "5432:5432"  # Expose for local development
+
+  # Django REST API Server (Development)
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    environment:
+      - DEBUG=True
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-bot_user}:${POSTGRES_PASSWORD:-dev_password}@postgres:5432/${POSTGRES_DB:-discord_bot_dev}
+      - DJANGO_API_URL=http://localhost:8000
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
+      - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI:-http://localhost:8000/spotify/callback/}
+    depends_on:
+      - postgres
+    networks:
+      - internal
+      - external
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app  # Mount source code for development
+
+  # Discord Bot (Development)
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.bot
+    environment:
+      - DJANGO_API_URL=http://api:8000
+      - TOKEN=${TOKEN}
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
+      - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI:-http://localhost:8000/spotify/callback/}
+      - SPOTIFY_DEVICE_NAME=${SPOTIFY_DEVICE_NAME:-Discord Bot Dev}
+    depends_on:
+      - api
+    networks:
+      - internal
+    restart: unless-stopped
+    volumes:
+      - .:/app  # Mount source code for development
+
+volumes:
+  postgres_dev_data:
+
+networks:
+  internal:
+    driver: bridge
+  external:
+    driver: bridge

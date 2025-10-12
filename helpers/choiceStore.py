@@ -1,24 +1,43 @@
-from storage.models import ListOfChoices, Item, Member
-from storage.serializers import ItemSerializer
-from asgiref.sync import sync_to_async
+import asyncio
+from api_client import api_client
 
-@sync_to_async
-def getRecentChoice(uid, name=None):
-    if name is None:
-        qs = ListOfChoices.objects.filter(member__member_id=uid).order_by('-last_used')
-    else:
-        qs = ListOfChoices.objects.filter(member__member_id=uid, name=name).order_by('-last_used')
-    if (qs.count() > 0):
-        return ItemSerializer(qs[0].item_set.all(), many=True).data
-    else:
+async def getRecentChoice(uid, name=None):
+    async with api_client as client:
+        params = {'member__member_id': uid}
+        if name is not None:
+            params['name'] = name
+            
+        result = await client._make_request('GET', '/api/list-of-choices/', params=params)
+        if 'error' not in result and result.get('results'):
+            # Get the most recent choice
+            choices = result['results']
+            if choices:
+                latest_choice = choices[0]  # Assuming ordered by last_used desc
+                # Get items for this choice
+                items_result = await client._make_request('GET', '/api/items/', params={
+                    'list': latest_choice['id']
+                })
+                if 'error' not in items_result:
+                    return items_result.get('results', [])
         return None
 
-@sync_to_async
-def setRecentChoice(uid, list, name=None):
-    member, member_created = Member.objects.get_or_create(member_id=uid)
-    list_of_choices = ListOfChoices(member=member, name=name)
-    list_of_choices.save()
-    for choice in list:
-        item = Item(list=list_of_choices, name=str(choice))
-        item.save()
-    return True
+async def setRecentChoice(uid, list, name=None):
+    async with api_client as client:
+        # Ensure member exists
+        await client.create_or_update_member(str(uid), {})
+        
+        # Create list of choices
+        choice_result = await client._make_request('POST', '/api/list-of-choices/', data={
+            'member': uid,
+            'name': name
+        })
+        
+        if 'error' not in choice_result:
+            choice_id = choice_result['id']
+            # Create items for each choice
+            for choice in list:
+                await client._make_request('POST', '/api/items/', data={
+                    'list': choice_id,
+                    'name': str(choice)
+                })
+        return True

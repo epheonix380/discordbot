@@ -9,34 +9,38 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from discord import app_commands
 from discord.ext import tasks, commands
 from dotenv import load_dotenv
-from django.conf import settings
 import os
 import shutil
 import re
 from automod.nsfw import handle_nsfw, handel_regex_nsfw
-from backend import brocken as notSettings
 from typing import List
 import json
 
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
 intents = discord.Intents.default()
 intents.message_content = True
 intents.all()
-if __name__ == '__main__':
-    import django
-    django.setup()
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
+
+# Add music cog
+async def setup_music_cog():
+    """
+    Setup music cog using Python 3.13 asyncio features
+    """
+    try:
+        await client.add_cog(SpotifyMusic(client))
+        print("✅ Spotify music cog loaded successfully")
+    except Exception as e:
+        print(f"❌ Failed to load Spotify music cog: {e}")
 
 from commands.nsfw import manual_nsfw
 from commands.time import timeHandler
 from commands.admin import admin
 from commands.ticTacToe import tic
-from commands.guessTheHero import auto_complete, guessTheHeroHandler, saveHeroName, guessHero
 from commands.choices import choices, saveChoices
-from helpers.guildStore import getNSFWChannel, getGuessTheHeroChannel
+from helpers.guildStore import getNSFWChannel
 from helpers.statsStore import addGuildActivity, getGuildActivity
 from commands.activity import handleActivity
 from commands.help import helpHandler
@@ -45,6 +49,7 @@ from commands.gym import handleDailyGym, handleGymOptIn, sendGymMessage, handleG
 from commands.gameSubscription import subscribe, checkGameVersions
 from helpers.reminders import handleReminderCheck, addReminder,handleReminderAdd
 from commands.automagic import automagic
+from commands.music.player import SpotifyMusic
 
 @client.event
 async def on_ready():
@@ -75,9 +80,6 @@ async def on_message(message: discord.Message):
             is_nsfw = await handle_nsfw(message)
         elif len(arr) != 0:
             is_nsfw = await handel_regex_nsfw(message)
-    guessTheHeroChannel = await getGuessTheHeroChannel(message.guild.id)
-    if (guessTheHeroChannel is not None and str(guessTheHeroChannel)[2:-1:1] == str(message.channel.id)):
-        await guessTheHeroHandler(message=message)
     if message.content.startswith(",nsfw"):
         is_nsfw = 0
         await manual_nsfw(message=message)
@@ -134,20 +136,14 @@ async def pingVoiceChannel(interaction:discord.Interaction, vc:str, message:str)
 async def first_commant(interaction: discord.Interaction):
     await interaction.response.send_message("Test")
 
-@tree.command(name="hero",description="Register a hero for guess the hero", guild=None)
-@app_commands.autocomplete(hero=auto_complete)
-async def first_commant(interaction: discord.Interaction,hero:str):
-    await saveHeroName(interaction=interaction, hero=hero)
+
 
 @tree.command(name="ping",description="Ping all the members of a voice channel", guild=None)
 @app_commands.autocomplete(vc=vc_auto_complete)
 async def ping_command(interaction: discord.Interaction,vc:str, message:str):
     await pingVoiceChannel(interaction=interaction, vc=vc, message=message)
 
-@tree.command(name="guess",description="Guess a hero for guess the hero", guild=None)
-@app_commands.autocomplete(hero=auto_complete)
-async def first_commant(interaction: discord.Interaction,hero:str):
-    await guessHero(interaction=interaction, hero=hero)
+
 
 @tasks.loop(minutes=5) # Schedule for 9:00 AM UTC
 async def tick():
@@ -184,6 +180,8 @@ async def clear_temp_folder_contents():
 
 @client.event
 async def on_ready():
+    print(f'We have logged in as {client.user}')
+    await setup_music_cog()
     clear_temp_folder_contents.start()
     tick.start()
     list = await tree.sync(guild=None)

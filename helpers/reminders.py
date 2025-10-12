@@ -3,38 +3,45 @@ import datetime
 import re
 import pytz
 import time as TIME
-from asgiref.sync import sync_to_async
-from storage.models import Member, MemberReminder
-from storage.serializers import MemberReminderSerializer
+import asyncio
+from api_client import api_client
 from helpers.timeStrore import getDefaultTimezone, getFormat
 
-@sync_to_async
-def getMembersHelper():
-    qs =  MemberReminder.objects.filter(isComplete=False, time__lte=datetime.datetime.now(tz=datetime.timezone.utc))
-    serialized = MemberReminderSerializer(qs, many=True)
-    data = serialized.data
-    return data
+async def getMembersHelper():
+    async with api_client as client:
+        result = await client._make_request('GET', '/api/member-reminders/', params={
+            'isComplete': 'false',
+            'time__lte': datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
+        })
+        if 'error' not in result:
+            return result.get('results', [])
+        return []
 
-@sync_to_async
-def getSingleMemberHelper(member_id):
-    qs =  MemberReminder.objects.filter(member__member_id=member_id, isComplete=False, time__lte=datetime.datetime.now(tz=datetime.timezone.utc))
-    serialized = MemberReminderSerializer(qs, many=True)
-    data = serialized.data
-    return data
+async def getSingleMemberHelper(member_id):
+    async with api_client as client:
+        result = await client._make_request('GET', '/api/member-reminders/', params={
+            'member__member_id': member_id,
+            'isComplete': 'false',
+            'time__lte': datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
+        })
+        if 'error' not in result:
+            return result.get('results', [])
+        return []
 
-@sync_to_async
-def updateReminder(id:str, newTime:datetime.datetime, tzTime:datetime.datetime):
-    memberReminder = MemberReminder.objects.get(id=id)
-    if newTime == tzTime:
-        memberReminder.delete()
-    else:
-        memberReminder.time=newTime
-        memberReminder.save()
+async def updateReminder(id:str, newTime:datetime.datetime, tzTime:datetime.datetime):
+    async with api_client as client:
+        if newTime == tzTime:
+            # Delete reminder
+            await client._make_request('DELETE', f'/api/member-reminders/{id}/')
+        else:
+            # Update reminder
+            await client._make_request('PATCH', f'/api/member-reminders/{id}/', data={
+                'time': newTime.isoformat()
+            })
 
-@sync_to_async
-def deleteReminder(id:str):
-    memberReminder = MemberReminder.objects.get(id=id)
-    memberReminder.delete()
+async def deleteReminder(id:str):
+    async with api_client as client:
+        await client._make_request('DELETE', f'/api/member-reminders/{id}/')
 
 async def handleReminderCheck(client:discord.Client):
     reminders = await getMembersHelper()
@@ -80,11 +87,22 @@ async def handleReminderList(client:discord.Client, message:discord.Message):
                        
 
 
-@sync_to_async
-def addReminder(member_id:str,origin_guild:str,origin_channel:str, target:str, reminder_text:str, time:datetime.datetime, frequency:datetime.timedelta = datetime.timedelta(seconds=0), isComplete:bool = False):
-    member = Member.objects.get(member_id=member_id)
-    reminder = MemberReminder(member=member,origin_guild=origin_guild, origin_channel=origin_channel, reminder_text=reminder_text, time=time, frequency=frequency, isComplete=isComplete, target=target)
-    reminder.save()
+async def addReminder(member_id:str,origin_guild:str,origin_channel:str, target:str, reminder_text:str, time:datetime.datetime, frequency:datetime.timedelta = datetime.timedelta(seconds=0), isComplete:bool = False):
+    async with api_client as client:
+        # Ensure member exists
+        await client.create_or_update_member(member_id, {})
+        
+        # Create reminder
+        await client._make_request('POST', '/api/member-reminders/', data={
+            'member': member_id,
+            'origin_guild': origin_guild,
+            'origin_channel': origin_channel,
+            'reminder_text': reminder_text,
+            'time': time.isoformat(),
+            'frequency': str(frequency),
+            'isComplete': isComplete,
+            'target': target
+        })
 
 def checkRegex(regex):
     return regex is not None

@@ -1,0 +1,35 @@
+# Dockerfile for Django REST API Server
+FROM python:3.13-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    libpq-dev \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Copy API-specific requirements and install Python dependencies
+COPY requirements-api.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements-api.txt
+
+# Copy application code
+COPY . .
+
+# Create non-root user
+RUN useradd -m -u 1000 apiuser && chown -R apiuser:apiuser /app
+USER apiuser
+
+# Expose port for API
+EXPOSE 8000
+
+# Run Django migrations and start server
+CMD ["python", "api_server.py"]

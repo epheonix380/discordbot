@@ -1,89 +1,101 @@
 import datetime
 import discord
-from django.db import models
-from storage.models import Member, MemberGymDay
-from storage.serializers import MemberSerializer, MemberGymDaySerializer
+from api_client import api_client
 from helpers.timeStrore import getDefaultTimezone, getFormat
 from helpers.timeUtils import getTimeFromString
 import pytz
 import time
-from asgiref.sync import sync_to_async
+import asyncio
 
-@sync_to_async
-def handleGymOptInHelper(message:discord.Message):
-    [member, isCreated] = Member.objects.get_or_create(member_id=message.author.id)
-    member.isGym = True
-    member.save()
+async def handleGymOptInHelper(message:discord.Message):
+    async with api_client as client:
+        # Get or create member
+        existing_member = await client.get_member_by_id(str(message.author.id))
+        if 'error' in existing_member:
+            # Create new member
+            await client.create_or_update_member(str(message.author.id), {
+                'isGym': True
+            })
+        else:
+            # Update existing member
+            await client.create_or_update_member(str(message.author.id), {
+                'isGym': True
+            })
 
-@sync_to_async
-def getMemberTime(uid):
-    try:
-        member = Member.objects.get(member_id=uid)
-        return member.gymCheckinTime
-    except:
+async def getMemberTime(uid):
+    async with api_client as client:
+        member = await client.get_member_by_id(str(uid))
+        if 'error' not in member:
+            return member.get('gymCheckinTime')
         return None
     
-@sync_to_async
-def getMemberDate(uid):
-    try:
-        member = Member.objects.get(member_id=uid)
-        return member.lastGymCheckinDate
-    except:
+async def getMemberDate(uid):
+    async with api_client as client:
+        member = await client.get_member_by_id(str(uid))
+        if 'error' not in member:
+            return member.get('lastGymCheckinDate')
         return None
     
-@sync_to_async
-def setMemberDate(uid, date:datetime.date):
-    try:
-        member = Member.objects.get(member_id=uid)
-        member.lastGymCheckinDate = date
-        member.save()
+async def setMemberDate(uid, date:datetime.date):
+    async with api_client as client:
+        await client.create_or_update_member(str(uid), {
+            'lastGymCheckinDate': date.isoformat()
+        })
         return True
-    except:
-        return None
     
-@sync_to_async
-def setMemberTime(message:discord.Message, time:datetime.time):
-    try:
-        member = Member.objects.get(member_id=message.author.id)
-        member.gymCheckinTime = time
-        member.save()
-    except:
-        return False
+async def setMemberTime(message:discord.Message, time:datetime.time):
+    async with api_client as client:
+        await client.create_or_update_member(str(message.author.id), {
+            'gymCheckinTime': time.isoformat()
+        })
+        return True
 
 async def handleGymOptIn(message:discord.Message):
     await handleGymOptInHelper(message)
     await message.channel.send("Opted in to gym")
 
-@sync_to_async
-def getMembersHelper():
-    qs =  Member.objects.filter(isGym=True)
-    data = MemberSerializer(qs, many=True).data
-    return data
+async def getMembersHelper():
+    async with api_client as client:
+        # Get all members with isGym=True
+        result = await client._make_request('GET', '/api/members/', params={'isGym': 'true'})
+        if 'error' not in result:
+            return result.get('results', [])
+        return []
 
-@sync_to_async
-def getGymObjectsHelper(member_id:str):
-    qs = MemberGymDay.objects.filter(member_id__member_id=member_id, date__gte=datetime.date(year=2023, month=7, day=10)).order_by("date")
-    data = MemberGymDaySerializer(qs, many=True).data
-    return data
+async def getGymObjectsHelper(member_id:str):
+    async with api_client as client:
+        # Get gym days for member since 2023-07-10
+        result = await client._make_request('GET', '/api/member-gym-days/', params={
+            'member__member_id': member_id,
+            'date__gte': '2023-07-10'
+        })
+        if 'error' not in result:
+            return result.get('results', [])
+        return []
 
-
-@sync_to_async
-def getIsMemberCheckedIn(uid, date:datetime.date):
-    qs = MemberGymDay.objects.filter(member__member_id=uid, date=date)
-    if qs.count() == 0:
+async def getIsMemberCheckedIn(uid, date:datetime.date):
+    async with api_client as client:
+        result = await client._make_request('GET', '/api/member-gym-days/', params={
+            'member__member_id': uid,
+            'date': date.isoformat()
+        })
+        if 'error' not in result:
+            results = result.get('results', [])
+            if len(results) > 0:
+                return results[0].get('isGym')
         return None
-    else:
-        return qs[0].isGym
 
-
-@sync_to_async
-def setMemberGymDaily(member_id:str, date:datetime.date,isGym:bool):
-    [member, isMember] = Member.objects.get_or_create(member_id=member_id)
-    print(member)
-    print(isMember)
-    memberGymDay = MemberGymDay(member=member, date=date, isGym=isGym)
-    print(memberGymDay)
-    memberGymDay.save()
+async def setMemberGymDaily(member_id:str, date:datetime.date, isGym:bool):
+    async with api_client as client:
+        # Ensure member exists
+        await client.create_or_update_member(member_id, {})
+        
+        # Create gym day record
+        await client._make_request('POST', '/api/member-gym-days/', data={
+            'member': member_id,
+            'date': date.isoformat(),
+            'isGym': isGym
+        })
 
 async def handleGym(message:discord.Message, client:discord.Client):
     instructions = message.content.split(" ")
@@ -140,14 +152,9 @@ class GymButtonYes(discord.ui.Button):
             format = format.replace("%H","").replace("%M","").replace("%I","").replace("%p","").replace(":","")
             formatedDate = self.date.strftime(format)
             await interaction.channel.send(f"Recorded as Yes for {formatedDate}")
-        except models.Model.DoesNotExist:
-            print("Member Does not exist")
+        except Exception as e:
+            print(f"Error: {e}")
             await interaction.channel.send(f"Unfortunately you do not exist in our systems")
-        except:
-            await interaction.channel.send(f"A weird error occured please contact your discord admin")
-            print(self)
-            print(self.member_id)
-            print(self.date)
  
 
 class GymButtonNo(discord.ui.Button):
@@ -166,14 +173,9 @@ class GymButtonNo(discord.ui.Button):
             format = format.replace("%H","").replace("%M","").replace("%I","").replace("%p","").replace(":","")
             formatedDate = self.date.strftime(format)
             await interaction.channel.send(f"Recorded as No for {formatedDate}")
-        except models.Model.DoesNotExist:
-            print("Member Does not exist")
+        except Exception as e:
+            print(f"Error: {e}")
             await interaction.channel.send(f"Unfortunately you do not exist in our systems")
-        except:
-            await interaction.channel.send(f"A weird error occured please contact your discord admin")
-            print(self)
-            print(self.member_id)
-            print(self.date)
 
 
 

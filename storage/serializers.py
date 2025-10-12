@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Channel,GameVersionSubscriptions,GameVersion,Member,MemberGymDay,MemberReminder, MemberTimeZoneMap, TimeZone, Item, GuildActivity, MemberGuildActivity, WeightedGuildActivity
+from .models import Channel,GameVersionSubscriptions,GameVersion,Member,MemberGymDay,MemberReminder, MemberTimeZoneMap, TimeZone, Item, GuildActivity, MemberGuildActivity, WeightedGuildActivity, SpotifyToken, Guild, GuessTheHero, ListOfChoices, BotIgnoreChannels, MemberPlaylist, PlaylistElement, ComplexFrequecy, MemberGymDay
 
 class ItemSerializer(serializers.ModelSerializer):
     class Meta:
@@ -79,4 +79,48 @@ class GameSubscriptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = GameVersionSubscriptions
         fields = ['game', 'channel']
-    
+
+class SpotifyTokenSerializer(serializers.ModelSerializer):
+    member = MemberSerializer(read_only=True)
+    class Meta:
+        model = SpotifyToken
+        fields = ['member', 'access_token', 'refresh_token', 'expires_at', 'scope', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
+
+class GuildSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Guild
+        fields = ['guild_id', 'guess_the_hero', 'nsfw_channel']
+
+class GuessTheHeroSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GuessTheHero
+        fields = '__all__'
+
+class ListOfChoicesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ListOfChoices
+        fields = '__all__'
+
+class BotIgnoreChannelsSerializer(serializers.ModelSerializer):
+    guild = GuildSerializer(read_only=True)
+    class Meta:
+        model = BotIgnoreChannels
+        fields = ['channel_id', 'guild']
+
+class MemberPlaylistSerializer(serializers.ModelSerializer):
+    member = MemberSerializer(read_only=True)
+    class Meta:
+        model = MemberPlaylist
+        fields = '__all__'
+
+class PlaylistElementSerializer(serializers.ModelSerializer):
+    playlist_id = MemberPlaylistSerializer(read_only=True)
+    class Meta:
+        model = PlaylistElement
+        fields = '__all__'
+
+class ComplexFrequecySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ComplexFrequecy
+        fields = '__all__'

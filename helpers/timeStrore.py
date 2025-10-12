@@ -1,61 +1,83 @@
-from storage.models import TimeZone, Member, MemberTimeZoneMap
-from asgiref.sync import sync_to_async
-from storage.serializers import TimeMapSerializer
+from api_client import api_client
+import asyncio
 
-@sync_to_async
-def getFormat(uid):
-    qs = Member.objects.filter(member_id=uid) 
-    if (qs.count() > 0):
-        return str(qs[0].time_format)
-    else:
+async def getFormat(uid):
+    async with api_client as client:
+        member = await client.get_member_by_id(str(uid))
+        if 'error' not in member:
+            return member.get('time_format', '%H:%M on %d-%m-%Y')
         return "%H:%M on %d-%m-%Y"
 
-@sync_to_async
-def setFormat(uid, time_format):
-    member, created = Member.objects.update_or_create(member_id=uid,defaults={
-        "time_format":time_format})
-    return created
+async def setFormat(uid, time_format):
+    async with api_client as client:
+        await client.create_or_update_member(str(uid), {
+            'time_format': time_format
+        })
+        return True
 
-@sync_to_async
-def getDefaultTimezone(uid):
-    qs = Member.objects.filter(member_id=uid) 
-    if (qs.count() > 0):
-        if (qs[0].time_zone is not None):
-            return str(qs[0].time_zone.time_zone)
-        else:
-            return None
-    else:
+async def getDefaultTimezone(uid):
+    async with api_client as client:
+        member = await client.get_member_by_id(str(uid))
+        if 'error' not in member:
+            timezone_data = member.get('time_zone')
+            if timezone_data:
+                return timezone_data.get('time_zone')
         return None
 
-@sync_to_async
-def setDefaultTimezone(uid, timezone):
-    time_zone, timeCreate = TimeZone.objects.update_or_create(time_zone=str(timezone))
-    member, created = Member.objects.update_or_create(member_id=uid,defaults={
-        'time_zone':time_zone
-    })
-    return created
-
-@sync_to_async
-def addTimezone(uid, timezone):
-    member, memberCreated = Member.objects.get_or_create(member_id=uid)
-    time_zone, timeCreated = TimeZone.objects.update_or_create(time_zone=str(timezone))
-    timeMap, timeMapCreated = MemberTimeZoneMap.objects.update_or_create(member=member, time_zone=time_zone)
-    return timeMapCreated
-
-@sync_to_async
-def removeTimezone(uid, timezone):
-    time_zone, timeCreated = TimeZone.objects.update_or_create(time_zone=str(timezone))
-    member, memberCreated = Member.objects.get_or_create(member_id=uid)
-    qs = MemberTimeZoneMap.objects.filter(member=member, time_zone=time_zone)
-    if (qs.count()>0):
-        qs[0].delete()
+async def setDefaultTimezone(uid, timezone):
+    async with api_client as client:
+        # Create or get timezone
+        timezone_result = await client._make_request('POST', '/api/timezones/', data={
+            'time_zone': str(timezone)
+        })
+        
+        # Update member with timezone
+        await client.create_or_update_member(str(uid), {
+            'time_zone': timezone_result.get('id') if 'error' not in timezone_result else None
+        })
         return True
-    return False
 
-@sync_to_async
-def getTimezones(uid):
-    member, memberCreated = Member.objects.get_or_create(member_id=uid)
-    qs = MemberTimeZoneMap.objects.filter(member=member)
-    data = TimeMapSerializer(qs,many=True).data
-    return data
+async def addTimezone(uid, timezone):
+    async with api_client as client:
+        # Ensure member exists
+        await client.create_or_update_member(str(uid), {})
+        
+        # Create or get timezone
+        timezone_result = await client._make_request('POST', '/api/timezones/', data={
+            'time_zone': str(timezone)
+        })
+        
+        # Create timezone mapping
+        mapping_result = await client._make_request('POST', '/api/member-timezone-maps/', data={
+            'member': uid,
+            'time_zone': timezone_result.get('id') if 'error' not in timezone_result else None
+        })
+        return 'error' not in mapping_result
+
+async def removeTimezone(uid, timezone):
+    async with api_client as client:
+        # Get timezone
+        timezone_result = await client._make_request('GET', '/api/timezones/', params={
+            'time_zone': str(timezone)
+        })
+        
+        if 'error' not in timezone_result and timezone_result.get('results'):
+            timezone_id = timezone_result['results'][0]['id']
+            
+            # Delete mapping
+            mapping_result = await client._make_request('DELETE', f'/api/member-timezone-maps/', params={
+                'member__member_id': uid,
+                'time_zone': timezone_id
+            })
+            return 'error' not in mapping_result
+        return False
+
+async def getTimezones(uid):
+    async with api_client as client:
+        result = await client._make_request('GET', '/api/member-timezone-maps/', params={
+            'member__member_id': uid
+        })
+        if 'error' not in result:
+            return result.get('results', [])
+        return []
     

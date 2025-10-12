@@ -1,0 +1,81 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-discord_bot}
+      POSTGRES_USER: ${POSTGRES_USER:-bot_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bot_user} -d ${POSTGRES_DB:-discord_bot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Django REST API Server
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    environment:
+      - DEBUG=${DEBUG:-False}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-bot_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-discord_bot}
+      - DJANGO_API_URL=http://api:8000
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
+      - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+      - external
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-8000}:8000"  # Expose API for OAuth callback
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/api/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Discord Bot
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.bot
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    environment:
+      - DJANGO_API_URL=http://api:8000
+      - TOKEN=${TOKEN}
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
+      - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI}
+      - SPOTIFY_DEVICE_NAME=${SPOTIFY_DEVICE_NAME:-Discord Bot}
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - internal
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  internal:
+    driver: bridge
+  external:
+    driver: bridge

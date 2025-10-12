@@ -1,44 +1,73 @@
-from storage.models import GameVersion, GameVersionSubscriptions, Channel, Guild
-from storage.serializers import GameSerializer, GameSubscriptionSerializer
-from asgiref.sync import sync_to_async
+import asyncio
+from api_client import api_client
 
-@sync_to_async
-def getOrCreate(appid, channelid, guildid):
-    qs, wasCreated = GameVersion.objects.get_or_create(appid=appid)
-    guild, z = Guild.objects.get_or_create(guild_id=guildid)
-    channel, y = Channel.objects.get_or_create(channel_id=channelid, guild=guild)
-    game, x = GameVersionSubscriptions.objects.get_or_create(game=qs, channel=channel)
-    data = GameSerializer(qs).data
-    guild.save()
-    channel.save()
-    game.save()
-    return data, wasCreated
+async def getOrCreate(appid, channelid, guildid):
+    async with api_client as client:
+        # Get or create game version
+        game_result = await client._make_request('GET', '/api/game-versions/', params={'appid': appid})
+        if 'error' not in game_result and game_result.get('results'):
+            game_data = game_result['results'][0]
+            wasCreated = False
+        else:
+            # Create new game version
+            game_result = await client._make_request('POST', '/api/game-versions/', data={'appid': appid})
+            game_data = game_result
+            wasCreated = True
+        
+        # Ensure guild exists
+        await client.create_or_update_guild(str(guildid), {})
+        
+        # Ensure channel exists
+        await client.create_or_update_channel(str(channelid), {
+            'guild': guildid
+        })
+        
+        # Create or get subscription
+        subscription_result = await client._make_request('POST', '/api/game-subscriptions/', data={
+            'game': game_data['id'],
+            'channel': channelid
+        })
+        
+        return game_data, wasCreated
 
-@sync_to_async
-def updateCurrentVersion(appid, version, patchVersion=None, name=None):
-    qs = GameVersion.objects.get(appid=appid)
-    if(name is not None):
-        qs.name = name
-    if(patchVersion is not None):
-        qs.patchVersion = patchVersion
-    qs.version = version
-    qs.save()
+async def updateCurrentVersion(appid, version, patchVersion=None, name=None):
+    async with api_client as client:
+        # Get game version
+        game_result = await client._make_request('GET', '/api/game-versions/', params={'appid': appid})
+        if 'error' not in game_result and game_result.get('results'):
+            game_id = game_result['results'][0]['id']
+            
+            # Update game version
+            update_data = {'version': version}
+            if name is not None:
+                update_data['name'] = name
+            if patchVersion is not None:
+                update_data['patchVersion'] = patchVersion
+                
+            await client._make_request('PATCH', f'/api/game-versions/{game_id}/', data=update_data)
 
-@sync_to_async
-def getAllGames():
-    qs = GameVersion.objects.all()
-    data = GameSerializer(qs, many=True).data
-    return data
+async def getAllGames():
+    async with api_client as client:
+        result = await client._make_request('GET', '/api/game-versions/')
+        if 'error' not in result:
+            return result.get('results', [])
+        return []
 
-@sync_to_async
-def getAllGamesForChannel(channelid):
-    qs = GameVersionSubscriptions.objects.filter(channel__channel_id=channelid)
-    data = GameSubscriptionSerializer(qs, many=True).data
-    return data
+async def getAllGamesForChannel(channelid):
+    async with api_client as client:
+        result = await client._make_request('GET', '/api/game-subscriptions/', params={
+            'channel__channel_id': channelid
+        })
+        if 'error' not in result:
+            return result.get('results', [])
+        return []
 
-@sync_to_async
-def getAllChannelsForGame(appid):
-    qs = GameVersionSubscriptions.objects.filter(game__appid=appid)
-    data = GameSubscriptionSerializer(qs, many=True).data
-    return data
+async def getAllChannelsForGame(appid):
+    async with api_client as client:
+        result = await client._make_request('GET', '/api/game-subscriptions/', params={
+            'game__appid': appid
+        })
+        if 'error' not in result:
+            return result.get('results', [])
+        return []
 
