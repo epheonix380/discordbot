@@ -9,3 +9,15 @@
 *.jpg
 *.jpeg
 *.mp4
+
+# --- deployment / local state (added 2026-07-18) ---
+# backups/ contains a plaintext .env copy and a DB dump - never commit
+backups/
+__pycache__/
+*.pyc
+.venv/
+discordBot/
+db-data/
+*.sql
+*.dump
+.claude/

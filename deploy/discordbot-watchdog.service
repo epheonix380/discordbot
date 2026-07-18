@@ -1,0 +1,9 @@
+[Unit]
+Description=Restart the discord bot if its gateway heartbeat goes stale
+Documentation=file:///root/discordbot/deploy/discordbot-watchdog.sh
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/discordbot-watchdog.sh

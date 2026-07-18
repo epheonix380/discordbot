@@ -1,0 +1,27 @@
+[Unit]
+Description=Discord bot (docker compose)
+Documentation=file:///root/discordbot/PLAN.md
+# Requires= (not Wants=) so we never start without the docker daemon.
+Requires=docker.service
+After=docker.service network-online.target postgresql.service
+Wants=network-online.target
+# The live data lives in the HOST postgres; starting before it is up just
+# means a crash loop until it arrives.
+Wants=postgresql.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/root/discordbot
+
+# --remove-orphans cleans up containers left by older compose definitions,
+# which is how a duplicate bot could otherwise survive a config change.
+ExecStart=/usr/bin/docker compose up -d --remove-orphans
+ExecStop=/usr/bin/docker compose down
+ExecReload=/usr/bin/docker compose restart
+
+# The first start builds nothing but does run migrations and slow ML imports.
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

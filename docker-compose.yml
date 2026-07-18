@@ -1,11 +1,43 @@
+# Deployment definition for the single production bot instance.
+#
+# Local deviations from upstream (2026-07-18) - worth upstreaming:
+#   - network_mode: host    the live data is in the HOST postgres on 127.0.0.1:5432,
+#                           which listens on loopback only. Bridge networking cannot
+#                           reach it. The bot needs no inbound ports.
+#   - container_name        a fixed name makes a second instance impossible; Docker
+#                           refuses to start a duplicate. Discord bots must be singletons.
+#   - dropped the "storage:" volume. storage/ is Django APP CODE (models, migrations;
+#     it is in INSTALLED_APPS), not runtime data. A named volume there freezes that code
+#     at first run, so later image rebuilds silently keep running stale migrations.
+#   - dropped the db.sqlite3 bind mount. ENVIRONMENT is set in .env, so settings.py
+#     uses DATABASE_URL (postgres). The sqlite file is unused in production.
+#   - log rotation, healthcheck, stop_grace_period.
+
 services:
   bot:
     build: .
+    container_name: discordbot
     env_file: .env
-    restart: unless-stopped
-    volumes:
-      - ./db.sqlite3:/app/db.sqlite3
-      - storage:/app/storage
+    restart: always
+    network_mode: host
+    stop_grace_period: 30s
 
-volumes:
-  storage:
+    # Bounded logs; the default json-file driver grows without limit.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+    # main.py rewrites the heartbeat every 30s, but only while the gateway is
+    # actually healthy. Staleness therefore catches a wedged-but-alive bot,
+    # which "restart: always" alone cannot see. start_period covers the slow
+    # first boot (migrations + the ML imports in automod/nsfw.py).
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - test $$(( $$(date +%s) - $$(cut -d. -f1 /tmp/discordbot-heartbeat 2>/dev/null || echo 0) )) -lt 180
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 300s

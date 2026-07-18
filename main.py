@@ -160,11 +160,29 @@ async def tick():
     #await handleReminderCheck(client=client)
 
 
+HEARTBEAT_FILE = os.getenv("HEARTBEAT_FILE", "/tmp/discordbot-heartbeat")
+
+async def heartbeat():
+    # Touched only while the gateway is genuinely healthy, so an external
+    # watchdog can tell "process alive" apart from "session wedged".
+    # client.latency is NaN before the first gateway heartbeat, and every
+    # comparison against NaN is False, so this also covers the not-yet-ready case.
+    while True:
+        if client.is_ready() and not client.is_closed() and client.latency < 5:
+            try:
+                with open(HEARTBEAT_FILE, "w") as f:
+                    f.write(str(time.time()))
+            except OSError as e:
+                print(f"Could not write heartbeat: {e}")
+        await asyncio.sleep(30)
+
+
 scheduler = AsyncIOScheduler()
 scheduler.add_job(tick, 'interval', minutes=5)
 scheduler.start()
 loop = asyncio.get_event_loop()
 loop.create_task(client.start(TOKEN))
+loop.create_task(heartbeat())
 loop.run_forever()
 
 

@@ -1,0 +1,12 @@
+[Unit]
+Description=Check the discord bot gateway heartbeat every 2 minutes
+
+[Timer]
+# Start checking a few minutes after boot so the container clears start_period.
+OnBootSec=5min
+OnUnitActiveSec=2min
+AccuracySec=15s
+Unit=discordbot-watchdog.service
+
+[Install]
+WantedBy=timers.target
