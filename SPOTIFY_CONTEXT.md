@@ -14,10 +14,98 @@
 Branch: `claude/spotify-connect-bot-step-1-in130u`, based directly on `production`
 (`d91273a`, the containerized/watchdog-supervised state — already includes the hosting work).
 
-**Phase 1 of `SPOTIFY_CONNECT_PLAN.md` §13 is done:** the data model & store.
-Phase 0 (de-risk experiments against a live Spotify Premium account) was explicitly **skipped**
-for this session — it needs interactive/live credentials this sandbox doesn't have — and is
-still open; see "Still open" below.
+**Phase 1 and Phase 2 of `SPOTIFY_CONNECT_PLAN.md` §13 are done:** data model & store, and the
+audio pipeline (creds → `Session` → `content_feeder` → ffmpeg → PCM). Phase 0 (de-risk
+experiments against a live Spotify Premium account) was explicitly **skipped** in both sessions —
+it needs interactive/live credentials this sandbox doesn't have — and is still open; see
+"Still open" below. **Phase 2's own acceptance criterion (a correct 10s PCM file of a known
+track) is likewise unverified against a real account for the same reason** — what *was* verified
+is detailed below.
+
+## What was built (Phase 2)
+
+Goal per plan §13: "creds → session → `content_feeder` → ffmpeg → PCM to file, off the asyncio
+loop." No Discord integration in scope for this phase.
+
+- **`music/session_manager.py`** — `build_session(credentials_json)`, `get_session(member_id,
+  credentials_json)` (in-process cache), `close_session(member_id)`.
+- **`music/content_pipeline.py`** — `fetch_pcm(session, track_uri, output_path, quality=...,
+  duration_seconds=None)`: loads the track via `content_feeder().load(...)`, feeds the returned
+  Ogg/Vorbis chunked stream into an `ffmpeg` subprocess from a background thread, decodes to raw
+  `s16le`/48kHz/stereo PCM at `output_path`. Both functions are synchronous/blocking by design —
+  the caller (a future `music/playback.py` or the Phase-2 smoke script) is responsible for
+  running them via `loop.run_in_executor(...)`, per plan §8's blocking-call warning.
+- **`music/phase2_smoke_test.py`** — standalone script, **not wired into the bot**:
+  `python -m music.phase2_smoke_test <credentials.json> <spotify:track:uri> [output.pcm]
+  [duration_seconds]`. This is the runnable form of Phase 2's acceptance test — hand it real
+  librespot OAuth creds (see the credential-format finding below) and a track URI and it should
+  produce a playable PCM file. **Nobody has run it against a real account yet.**
+- **`requirements.txt`** — librespot repinned to `@18104622b3be02062f1f8abe8dafc396413e9784`
+  (v0.0.10) as the plan specified. That pin's own `PKG-INFO` declares
+  `pycryptodomex>=3.22.0`, `requests>=2.32.3`, `websocket-client>=1.8.0`, `zeroconf>=0.146.4` —
+  all **higher** than what was already pinned here, so those four were bumped too (verified: a
+  clean venv installs the new librespot pin + all four bumped deps together with no resolver
+  conflicts; `protobuf==3.20.1`, `pyogg==0.6.14a1`, `defusedxml==0.7.1`, `ifaddr==0.2.0` already
+  satisfied the new pin's requirements as-is). `PyNaCl` (Phase 3, Discord voice) still not added
+  — correctly out of scope here.
+- **`Dockerfile`** — added `ffmpeg` to the `apt-get install` line. `libopus0` still deliberately
+  not added (Phase 3/Discord-voice concern, not Phase 2).
+
+### Important finding: `OAuth.save_creds()` output does not round-trip through `stored_file()`
+
+This matters for **Phase 4** (OAuth link UX) and anyone tempted to copy plan Appendix B literally.
+Verified by reading the actual installed source of the pinned librespot commit
+(`librespot/oauth.py`, `librespot/core.py`), not just the plan text:
+
+- `OAuth.save_creds(path)` writes `{"client_id", "access_token", "expires_at", "refresh_token",
+  "type": "OAUTH_PKCE_TOKEN"}`.
+- `Session.Builder().stored_file(path)` / `.stored(str)` only parse `{"type", "username",
+  "credentials"}` (falling back to a Rust-librespot `{"auth_type", "auth_data"}` shape). Neither
+  matches what `save_creds()` produces. Feeding one into the other silently sets no
+  `login_credentials` (`KeyError` is swallowed), and `.create()` then raises `"You must select an
+  authentication method."` — a confusing failure with no clue it's a format mismatch.
+- **Workaround already implemented** in `session_manager._login_credentials_from_json()`: builds
+  `Authentication.LoginCredentials(typ=AUTHENTICATION_SPOTIFY_TOKEN,
+  auth_data=access_token.encode())` directly — exactly what `OAuth.get_credentials()` does
+  internally — bypassing `stored_file()`/`stored()` entirely. It also rejects (raises) if
+  `expires_at` has already passed.
+- **Consequence for `SpotifyLink.credentials` (Phase 1 model):** whatever Phase 4's OAuth flow
+  persists into that field should be the raw JSON dict `save_creds()` writes (or equivalent),
+  since `session_manager.build_session()` is what will consume it — not a pre-encoded
+  `stored_file`-compatible blob. No model change needed, just noting the shape for Phase 4.
+- **Consequence for "reuse & refresh" (plan §5.5):** the plan assumed librespot "refreshes the
+  underlying token itself" once built from `stored_file`. That assumption is unverified and now
+  looks shakier given the format mismatch above — `Session.Builder().create()` takes a
+  point-in-time access token and does not appear to hold onto the OAuth refresh_token/client_id
+  needed to refresh it later. **Deliberately not solved here** (would be scope creep for "no
+  Discord" Phase 2); flagging as a real open question for Phase 4/7: something will need to call
+  Spotify's token endpoint with the stored `refresh_token` and re-persist before/when
+  `expires_at` passes. `session_manager.get_session()` currently just raises a clear error
+  telling the user to re-link if the stored token is expired — no silent failure, but also no
+  auto-refresh.
+
+### What was actually verified vs. not (be precise about this)
+- ✅ **Verified**: librespot API surface used here (`Session.Builder`, `content_feeder().load()`,
+  `TrackId.from_uri()`, `VorbisOnlyAudioQuality`, `LoadedStream.input_stream.stream().read()`,
+  `Authentication.LoginCredentials`) matches the actual installed source at the pinned commit —
+  read directly, not assumed from the plan.
+- ✅ **Verified**: the `ffmpeg`-piping half of `content_pipeline.fetch_pcm()` — fed a synthetic
+  Ogg/Vorbis file (via a fake session object standing in for real librespot) through the exact
+  same threaded-feed → subprocess-ffmpeg → file code path used in production. Output was exactly
+  `48000 Hz × 2 ch × 2 bytes × N seconds` bytes, i.e. correct PCM framing, for a requested
+  2-second clip.
+- ✅ **Verified**: `ffmpeg` installs cleanly via `apt-get install --no-install-recommends ffmpeg`
+  on the same Debian slim family the `Dockerfile` uses (this sandbox needed `apt-get update`
+  first — a stale index caused spurious 404s on unrelated transitive packages; not a real
+  incompatibility).
+- ✅ **Verified**: new/bumped dependency versions resolve together with no conflicts, and `cp39`
+  wheels exist for all of them (checked directly against PyPI's file listing) — matches the
+  `Dockerfile`'s `python:3.9.13-slim` target.
+- ❌ **NOT verified**: anything requiring an actual Spotify account — OAuth token exchange,
+  `Session.Builder().create()` actually authenticating against a real access point,
+  `content_feeder().load()` returning real track audio. This is the same gap Phase 0 was meant to
+  close. `music/phase2_smoke_test.py` is ready for whoever has real Premium credentials to close
+  it.
 
 ## What was built (Phase 1)
 
@@ -72,30 +160,31 @@ committed. The repo's actual runtime is Python 3.9.13 in Docker per the `Dockerf
 
 ## Still open / for the next phase(s)
 
-Per `SPOTIFY_CONNECT_PLAN.md` §13, **Phase 2 — Audio pipeline (no Discord)** is next:
-creds → `Session` → `content_feeder` → ffmpeg → PCM to file, off the asyncio loop. Concretely,
-still needed before that can work at all:
+Per `SPOTIFY_CONNECT_PLAN.md` §13, **Phase 3 — Discord voice** is next: `PyNaCl` + `ffmpeg`/
+`libopus` in the image (ffmpeg already done in Phase 2; `libopus0` still needed), `vc.play`,
+join/leave, hooked up to a hard-coded track for now. Concretely:
 
-- **`requirements.txt`** still pins the **old** librespot commit
-  (`git+https://github.com/kokarare1212/librespot-python@81ecec3b682e1bec5b3ee80342f8db6c15a84047`,
-  line 43). Plan §0/§10 says repin to
-  `@18104622b3be02062f1f8abe8dafc396413e9784` (v0.0.10) — the old pin lacks the OAuth/connect-state
-  pieces the feature needs. **Not yet done.**
-- **`PyNaCl` is missing** from `requirements.txt` (needed later for Discord voice, plan §10) —
-  not needed for Phase 2 itself but will be for Phase 3.
-- **`Dockerfile`** doesn't install `ffmpeg` or `libopus0` yet (plan §10) — Phase 2 needs `ffmpeg`
-  at minimum; `libopus0` can wait for Phase 3 (Discord voice).
-- No `music/` package exists yet (plan §7: `oauth_flow.py`, `session_manager.py`,
-  `connect_device.py`, `search.py`, `playback.py`, `commands.py`). Phase 2 only needs enough of
-  `session_manager.py` (creds → `Session`, built in an executor) and a scratch script driving
-  `content_feeder()` to prove the audio path — full module layout can wait for Phase 4+.
-- **Phase 0 (de-risk) was never run.** Nobody has confirmed against a real account that: (a) the
-  new librespot pin's OAuth flow completes via paste-back, (b) `content_feeder().load(...)`
-  actually yields bytes, (c) `put_connect_state` + dealer registration makes a device appear in
-  the Spotify app. Phase 2/3 work can proceed on the *assumption* these work (per the plan's own
-  findings in §2.1/§2.2, which cite the librespot-python source directly), but the first person
-  with a real Premium account + this branch should run Phase 0's checklist and report back —
-  it's the plan's own recommended gate before Phase 5 (Connect receiver) in particular.
+- **`PyNaCl` is missing** from `requirements.txt` — needed for Discord voice. Not added yet
+  (correctly out of scope for Phase 2).
+- **`Dockerfile`** needs `libopus0` added alongside the `ffmpeg` this session added.
+- No `music/playback.py` (per-guild `GuildPlayer`) or Discord-facing code exists yet (plan §7).
+  `music/content_pipeline.fetch_pcm()` writes to a file today; Phase 3 will want a variant (or a
+  wrapper) that hands frames to `discord.FFmpegPCMAudio`/`vc.play()` instead of writing to disk —
+  reuse the same threaded-feed pattern, don't rebuild it.
+- `main.py` integration (plan §9: `,`-prefix branches in the existing `discord.Client` router,
+  not Cogs) still hasn't started — first real Discord-facing code is Phase 3/4.
+- **Phase 0 (de-risk) was never run, and neither was Phase 2's actual acceptance test** (a real
+  10s PCM file from a real account) — see "What was actually verified vs. not" above. Both are
+  the same underlying gap: no live Spotify Premium account + real OAuth flow available in this
+  sandbox. `music/phase2_smoke_test.py` exists specifically so the first person with real
+  credentials can close this gap without writing new code — just run it and report back. This is
+  worth doing **before** Phase 5 (Connect receiver) in particular, per the plan's own gating.
+- The `stored_file()`/`save_creds()` credential-format mismatch (see above) means **Phase 4**
+  (OAuth link UX) needs to persist the raw `save_creds()`-shaped JSON into `SpotifyLink.credentials`
+  and go through `session_manager.build_session()` — not assume plan Appendix B's
+  `Session.Builder().stored_file(path)` literally works for this token type.
+- Token refresh (plan §5.5) is unresolved — see "Consequence for reuse & refresh" above. Needs a
+  real design decision in Phase 4 or 7, not a quick patch.
 - `,spotify unlink` (plan §1.3/§12) has no command handler yet — trivial once `music/commands.py`
   exists; it's just `await spotifyStore.deleteLink(uid)`.
 
@@ -107,3 +196,6 @@ still needed before that can work at all:
   `on_message` router (plan §9) — **not** `commands.Bot`/Cogs. Confirmed the router shape still
   matches: `client = discord.Client(...)`, `tree = app_commands.CommandTree(client)`,
   `if/elif message.content.startswith(",...")` in `on_message` (`main.py`).
+- `music/session_manager.py` and `music/content_pipeline.py` functions are synchronous/blocking
+  on purpose — callers run them via `run_in_executor`, they don't do their own async wrapping.
+  Keep that split when Phase 3 builds `GuildPlayer` on top.
