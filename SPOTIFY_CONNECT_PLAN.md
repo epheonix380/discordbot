@@ -1,40 +1,48 @@
-# SPOTIFY_CONNECT_PLAN.md — Spotify‑streaming music bot (spec + execution plan)
+# SPOTIFY_CONNECT_PLAN.md — Spotify Connect music bot (spec + execution plan)
 
-**Purpose:** a complete, executable specification for adding a Spotify music feature to
-`discordbot`. A user runs a `,play` command; the bot replies with a Spotify login link; the
-user authorizes; the bot then streams that user's Spotify audio into their Discord voice
-channel using **librespot‑python**.
+**Purpose:** a complete, executable specification for adding a Spotify feature to `discordbot`.
+A user runs `,play`; the bot replies with a Spotify **login link**; the user authorizes via
+OAuth; the bot uses the resulting credentials with **librespot‑python** to register a genuine
+**Spotify Connect device** and stream the audio into the user's Discord voice channel — fully
+remote, controllable from the user's own Spotify app and/or Discord commands.
 
-**Audience:** an implementing agent/model who has *not* seen the exploratory branches. Read
-this top to bottom before writing code. Section 2 corrects a fundamental misconception that is
-baked into the existing exploratory branches — do not skip it.
+**Audience:** an implementing agent/model who has *not* seen the exploratory branches. Read top
+to bottom before writing code. §2 corrects a misconception that is baked into the exploratory
+`librespot` branch — do not skip it.
 
-> This document is **not** the same as the repo's existing `PLAN.md`, which is about
-> deployment/hosting reliability and is unrelated to this feature.
+> This is **not** the repo's existing `PLAN.md` (which is about deployment/hosting reliability).
 
 ---
 
 ## 0. TL;DR for the implementer
 
-- Target base branch: **`production`** (`be9c70a`, Docker, Python 3.9.13). Develop the feature
-  on top of it. `requirements.txt` on `production` **already pins** librespot‑python
-  (`git+https://github.com/kokarare1212/librespot-python@81ecec3…`).
-- **A Spotify Web‑API OAuth token cannot be fed into librespot.** The old `librespot` branch
-  does exactly this (`Session.Builder().user_pass(member_id, access_token)`) and it is wrong.
-  See §2.
-- librespot‑python's own OAuth is **PKCE‑based** and exposes `set_code()`, so the authorization
-  code can be supplied out‑of‑band. That is what makes a Discord "click this link" flow
-  viable **using librespot's keymaster client_id** (not your own app). See §2 and §5.
-- The bot is a plain `discord.Client` with a `,`‑prefix router in `on_message` and an
-  `app_commands` tree — **not** `commands.Bot`/Cogs. The exploratory `commands/music/player.py`
-  is a `commands.Cog` and will not load as‑is. Integrate with the existing router. See §9.
-- **What you can realistically ship:** a per‑user, command‑driven URI player (search a
-  track/album/playlist, stream it into the VC using the user's Premium account credentials).
-  A *true* Spotify‑Connect receiver (the bot showing up as a selectable device inside the
-  Spotify app, controlled from that app) is **LAN‑only** in librespot‑python and is a
-  stretch goal, not the MVP. See §2.4 and §14.
-- Requires: **Spotify Premium** per streaming user, **ffmpeg** + **libopus** + **PyNaCl** in
-  the image, and a public HTTPS endpoint is *not* required (paste‑back flow). See §10–§11.
+- **Base branch:** develop on top of **`production`** (`be9c70a`, Docker, Python 3.9.13).
+- **Bump the librespot pin.** `production`'s `requirements.txt` pins an **old** commit
+  (`81ecec3…`). Repin to a recent master —
+  **`git+https://github.com/kokarare1212/librespot-python@18104622b3be02062f1f8abe8dafc396413e9784`**
+  (v0.0.10). The recent commits add the pieces this feature needs: full OAuth user‑token
+  manager, `set_scopes`/`set_listen_all`/`set_code`, and a working dealer/connect‑state path.
+- **A Spotify Web‑API OAuth token is NOT a librespot credential** and cannot authenticate
+  librespot to Spotify's access point. The old `librespot` branch does exactly this
+  (`Session.Builder().user_pass(member_id, access_token)`) and it is wrong. You must use
+  **librespot's own OAuth** (first‑party *keymaster* client_id). See §2.1.
+- **A real, internet Spotify Connect receiver IS achievable** with librespot‑python: the
+  library registers the device (`put_connect_state` → `/connect-state/v1/devices/{id}`) and
+  opens the dealer websocket (`wss://…/?access_token=…`) with `MessageListener`/`RequestListener`
+  dispatch. It works anywhere with a valid credential blob — **no LAN/Zeroconf requirement**.
+  Zeroconf is merely one (LAN) way to *obtain* credentials; OAuth is the other. See §2.2.
+- **Caveat — no turnkey player.** librespot‑python gives you the *plumbing* (Session, OAuth,
+  dealer client + listeners, `put_connect_state`, the Connect/Player protobufs, the content
+  feeder). It does **not** ship a finished SPIRC player state machine. The bot must implement
+  the loop: register the device, react to dealer play/pause/seek/next commands, pull audio via
+  `content_feeder`, pipe it to Discord voice, and report state back with `put_connect_state`.
+  This is real work but clearly possible. See §2.3 and §7.
+- The bot is a plain `discord.Client` with a `,`‑prefix router in `on_message` + an
+  `app_commands` tree — **not** `commands.Bot`/Cogs. The exploratory Cog `player.py` won't load
+  as‑is. Integrate with the existing router. See §9.
+- Requires **Spotify Premium** per user, plus **ffmpeg** + **libopus** + **PyNaCl** in the
+  image. See §10. A public HTTPS callback is *nice‑to‑have* (clean redirect) but not required
+  (paste‑back / loopback fallback both work). See §5.
 
 ---
 
@@ -42,442 +50,412 @@ baked into the existing exploratory branches — do not skip it.
 
 ### 1.1 Happy path
 1. User is in a voice channel and types `,play <song / artist / spotify URL>`.
-2. If the user has **not** linked Spotify, the bot replies (ephemerally / in‑channel) with a
-   **Spotify authorization link** and short instructions.
-3. User clicks the link, logs into Spotify, approves the scopes. Their browser is redirected
-   to `http://127.0.0.1:5588/login?code=…`, which **will not load** (there is no server on the
-   user's machine). The instructions tell them to copy the whole URL (or just the `code=`
-   value) and paste it back to the bot (DM, or a Discord modal — see §5.3).
-4. The bot exchanges the code (PKCE), obtains **reusable librespot credentials**, and persists
-   them for that user.
-5. The bot joins the user's voice channel, resolves the query to a Spotify track URI, streams
-   the audio through librespot → ffmpeg → Discord voice.
-6. Subsequent `,play` calls skip straight to step 5 (credentials cached).
+2. If the user has **not** linked Spotify, the bot replies with a **Spotify authorization link**
+   + short instructions (§5). Warns: **Premium required**.
+3. User authorizes. The bot completes OAuth and persists the user's **reusable librespot
+   credentials** (§6).
+4. The bot joins the user's voice channel and brings up a librespot **Session** from those
+   credentials, connecting to the dealer and **registering a Connect device**
+   (e.g. "Discord: #general"). The device now appears in the user's Spotify app.
+5. Playback starts on that device — either the bot auto‑transfers/starts the resolved query via
+   the Web API, or the user selects the device in their Spotify app. librespot pulls the audio;
+   the bot pipes it into the VC.
+6. The user can control playback **from their own Spotify app** (play/pause/skip/seek/queue)
+   *and/or* with Discord commands. The bot mirrors state back to Spotify via `put_connect_state`.
+7. Subsequent `,play` skips straight to playback (credentials cached).
 
-### 1.2 Supporting commands (MVP scope)
+### 1.2 Two shippable modes (build B first, then A)
+- **Mode B — command‑driven URI player (MVP milestone).** No dealer/connect‑state. `,play`
+  resolves a URI and streams it via `content_feeder`. Simplest; proves the audio path.
+- **Mode A — real Connect receiver (target).** Adds device registration + dealer command loop,
+  so the bot is a genuine Connect speaker controllable from the Spotify app.
+
+### 1.3 Commands (MVP)
 | Command | Behaviour |
 |---|---|
-| `,play <query|url>` | Link if needed, else join VC and play/queue the resolved track. |
-| `,pause` / `,resume` | Pause/resume the current guild playback. |
-| `,skip` | Skip to next queued item. |
-| `,stop` / `,leave` | Stop playback, clear queue, disconnect from VC. |
-| `,queue` | Show the current queue. |
-| `,nowplaying` | Show the current track (title/artist/progress). |
+| `,play <query|url>` | Link if needed; join VC; register device (Mode A) / stream (Mode B). |
+| `,pause` / `,resume` | Pause/resume current guild playback. |
+| `,skip` | Next track. |
+| `,stop` / `,leave` | Stop, clear, disconnect, tear down the Connect device. |
+| `,queue` | Show queue. |
+| `,nowplaying` | Current track + progress. |
 | `,spotify unlink` | Delete the caller's stored credentials. |
 
-Prefix `,` and DM/app‑command variants must match the existing style in `main.py` (§9).
+Match the existing `,`‑prefix style and handler signatures in `main.py` (§9).
 
 ---
 
-## 2. Critical technical findings (read before designing anything)
+## 2. Critical technical findings (read before designing)
 
-### 2.1 There are two *different* Spotify "tokens" — they are not interchangeable
-- **Web‑API OAuth token** (issued to *your* registered developer app, via the Authorization
-  Code flow, scopes like `user-modify-playback-state`, `streaming`): lets you **call
-  `api.spotify.com`** (search, read/skip playback on an *existing* device) and lets the
-  **browser Web Playback SDK** create a device. It **cannot** be used to authenticate
-  librespot to Spotify's access point (AP). It produces **no audio bytes** on its own.
-- **librespot credentials**: librespot authenticates to Spotify's AP (`ap:4070`, proprietary
-  TrIPE/login5 handshake) and can pull raw audio. These come from librespot's *own* OAuth
-  (first‑party **keymaster** client_id), from Zeroconf, or from previously saved reusable
-  credentials.
+### 2.1 Web‑API token ≠ librespot credential (still true)
+- **Web‑API OAuth token** (issued to *your* registered app): lets you call `api.spotify.com`
+  (search, transfer/skip on an existing device) and drive the browser Web Playback SDK. It
+  **cannot** authenticate librespot to the access point and produces **no audio** by itself.
+- **librespot credential:** obtained from librespot's **own** OAuth (first‑party *keymaster*
+  client_id), Zeroconf, or a saved reusable‑credentials blob. This is what grants AP/stream
+  access. `Session.Builder().oauth()` hardcodes the keymaster client_id — **use it; do not
+  substitute your own app id**, whose token the AP rejects (librespot‑org/librespot #1501).
+- Convenient bonus: once you have a librespot `Session`, you can get a Web‑API token from the
+  *same* session via `session.tokens().get("<scope>")` — so search / `transfer_playback` need no
+  separate app credentials.
+- **The `librespot` branch's `Session.Builder().user_pass(member_id, access_token)` is wrong**
+  twice over: `user_pass` wants a username/password, and an access token isn't a librespot
+  credential. Discard it.
 
-**Consequence:** you cannot register your own Spotify app, get a `streaming`‑scoped token, and
-hand it to librespot. Spotify only issues AP/streaming entitlement to first‑party client_ids.
-This is confirmed by librespot‑org/librespot issue #1501 ("oauth2 token → stored credentials"),
-which remains unimplemented because the exchange happens inside the closed protocol.
+### 2.2 A real internet Connect receiver is supported (the earlier "LAN‑only" claim was wrong)
+Confirmed in librespot‑python `@18104622` (`librespot/core.py`):
+- `ApiClient.put_connect_state(connection_id, PutStateRequest)` → `PUT
+  https://<spclient>/connect-state/v1/devices/{device_id}` — **registers/updates the device**
+  with Spotify Connect.
+- `DealerClient` opens `wss://<dealer>/?access_token=<token>` and dispatches `MESSAGE`/`REQUEST`
+  frames to registered `MessageListener`/`RequestListener` objects (`add_message_listener`,
+  `add_request_listener`, `handle_message`, `handle_request`), with ping/pong keepalive and
+  auto‑reconnect (`ConnectionHolder`).
+- Connect protobufs present: `Connect_pb2` (`PutStateRequest`, device/cluster state),
+  `Player_pb2`, `TransferState_pb2`, `Queue_pb2`, `PlayOrigin_pb2`, `ContextPlayerOptions_pb2`.
+- This is the **internet** Connect path (dealer + spclient), used by Spotify's own apps. It does
+  **not** require the controller to be on the same network. **Zeroconf (`librespot/zeroconf.py`)
+  is only a LAN credential‑handoff mechanism — not a limit on the receiver.**
 
-**The existing `librespot` branch embodies exactly this mistake** in
-`music/librespot_manager.py`:
-```python
-session = Session.Builder().user_pass(member_id, token_data['access_token']).create()
-```
-`user_pass` expects a Spotify *username + password*, not a Web‑API access token. This will
-never work. Discard that approach.
+### 2.3 What librespot‑python does *not* give you (the implementation gap)
+There is no finished SPIRC "player" that automatically plays a track when Spotify transfers to
+the device and keeps the reported state in sync. The bot must build that loop on top of the
+primitives in §2.2:
+1. Construct and PUT an initial `PutStateRequest` describing the device (name, capabilities —
+   `can_play`, volume steps, supported types).
+2. Register listeners; obtain the dealer `connection_id` (from the initial hello message) and
+   include it in `put_connect_state`.
+3. On incoming commands (transfer/play/pause/resume/seek/skip/set‑queue), drive playback via
+   `content_feeder().load(...)` and update local player state.
+4. Periodically / on change, `put_connect_state` to report position, track, and play/pause so
+   the Spotify UI stays correct.
 
-### 2.2 librespot‑python's OAuth is PKCE and can be driven out‑of‑band
-From `librespot/oauth.py` (pinned commit `81ecec3`):
-- Authorize URL:
-  `https://accounts.spotify.com/authorize?response_type=code&client_id=<keymaster>&redirect_uri=http://127.0.0.1:5588/login&code_challenge=<S256>&code_challenge_method=S256&scope=<25 scopes>`
-- `flow()` = `get_auth_url()` → `run_callback_server()` → `request_token()` → `get_credentials()`.
-- Crucially it exposes **`set_code(code)`**, so you can **skip the local callback server**:
-  `get_auth_url()` (send to user) → user pastes code → `set_code(code)` → `request_token()`
-  → `get_credentials()`.
-- Because it uses **PKCE (S256, no client secret)**, and Spotify does not verify that a server
-  actually received the loopback redirect, the paste‑back flow works from any machine.
-- `get_credentials()` returns a `LoginCredentials` of type
-  `AUTHENTICATION_SPOTIFY_TOKEN`; `save_creds()` persists client_id / access token / expiry /
-  refresh token; the resulting **reusable credentials blob** can be reloaded later with
-  `Session.Builder().stored_file(path)` (no re‑auth).
+Budget time for this in Mode A (§13, Phase 5). Mode B avoids it entirely.
 
-**This is the linchpin that makes the whole feature possible.** Verify it first (§13, Phase 0).
+### 2.4 OAuth redirect options (login‑link UX)
+librespot‑python's `OAuth` (in `librespot/oauth.py`) uses **PKCE (S256)** and now exposes:
+- constructor `OAuth(client_id, redirect_url, oauth_url_callback)` — **redirect_url is
+  configurable**;
+- `get_auth_url()`, `set_scopes()`, `set_listen_all(True)` (callback server binds `0.0.0.0`),
+  `set_code(code)` (supply the code out‑of‑band, skipping the local server), `request_token()`,
+  `get_credentials()`, `save_creds(path)`.
 
-### 2.3 The redirect URI cannot be your own server
-The redirect is `http://127.0.0.1:5588/login`, tied to the **keymaster** client_id (which you
-do not own). You **cannot** substitute a public `https://yourbot/callback` — Spotify will
-reject an unregistered redirect for that client_id, and you cannot use your own client_id
-because its token would be rejected at the AP (§2.1). Therefore the login UX **must** be
-paste‑back (copy the `code`), not an automatic web redirect. Design the UX around that (§5.3).
-Do not spend time trying to host a callback that "just works"; it can't for keymaster.
+So you have **three** ways to capture the code for a remote Discord user:
+- **(a) Public callback (cleanest):** construct `OAuth` with `redirect_url =
+  https://<yourbot>/spotify/callback` and run the callback server (or your own web handler);
+  requires that redirect to be accepted for the keymaster client_id — **verify in Phase 0**; if
+  rejected, fall back to (b)/(c).
+- **(b) Paste‑back:** send `get_auth_url()`; user copies the `?code=…` from the (failing)
+  redirect and pastes it back (Discord modal or DM); bot calls `set_code()` → `request_token()`.
+- **(c) Loopback + listen‑all:** only helps when the browser can reach the bot host directly.
 
-### 2.4 "Connect speaker" — what is and isn't achievable
-The user's phrasing is "stream as a connect speaker." Be precise about what that means:
-- **True Spotify Connect receiver** (the bot appears as a device inside the user's Spotify app,
-  and they press play *there*): librespot‑python only supports this via **Zeroconf/mDNS on the
-  local network** (`ZeroconfServer`). A Discord bot on a VPS and a user on their phone are not
-  on the same LAN, so this does **not** work remotely. Full internet Connect (dealer +
-  SPIRC receiver) is only partially present in librespot‑python and is not a safe MVP target.
-- **What the MVP actually is:** a **command‑driven URI player**. The bot holds the user's
-  librespot credentials and streams specific tracks it resolves from `,play <query>`. It is
-  *not* remotely controllable from the Spotify app. Frame the feature this way to the user;
-  see Open Questions (§16). Keep true‑Connect as a documented stretch goal (§14).
+Default the design to **(b) paste‑back** (always works), and try to upgrade to **(a)** in
+Phase 0 if keymaster accepts a hosted redirect. Keymaster/keymaster‑style clients historically
+allow `http://127.0.0.1` redirects; a public HTTPS redirect must be validated empirically.
 
 ### 2.5 Premium required
-librespot streams full‑length tracks only for **Spotify Premium** accounts. Free accounts will
-fail or be crippled. State this to users at link time.
+Full‑track streaming via librespot needs **Spotify Premium**. State this at link time.
 
 ---
 
 ## 3. Branch survey — what exists and what to reuse
 
-All branches below diverge from `production`. Fetch and inspect, but treat them as prototypes.
-
 | Branch | Approach | Verdict |
 |---|---|---|
-| **`librespot`** | Python "microservice": `music/handler.py` (correct `Session.Builder().oauth(cb)`), `music/librespot_manager.py` (token mgmt + **broken** `user_pass(access_token)` + stub play/pause), `music/server.py` (localhost OAuth callback server), Cog `player.py`, `SpotifyToken` model (migration 0047). | **Best conceptual match.** Reuse the model, the token‑refresh scaffolding, and the OAuth‑callback idea. Fix the auth mistake (§2.1). Playback is all stubs — must be written. |
-| **`headless-spotify`** | JS service (`spotify/`) using **Spotify Web Playback SDK** in a headless browser (`puppeteer` + `puppeteer-stream`), audio → webm → ffmpeg → PCM (`helpers/audio.py`); real Web‑API OAuth (`streaming` scope); `Member.spotify` TextField (migration 0048). Adapted from IiroP/spotify-headless-client. | **The only approach whose "click a link" OAuth works with your own app**, and it *does* create a real Connect device. But heavy (a browser per stream), needs Widevine/EME, one token = one browser. Keep as the **alternative architecture** (§4, Option B). |
-| **`dyspotify`** | Vendored **Rust** librespot source + `helpers/spotify.py` shelling out to a `librespot` **binary** with `--username/--password ... -B pipe` \| ffmpeg. | Username/password login is deprecated by Spotify; vendoring Rust is heavy. Useful only as reference for the ffmpeg pipe pattern. |
-| **`librespot-raw`** | `helpers/pyaudio.py`: `librespot` binary → `FFmpegPCMAudio(pipe=True)` into `vc.play`. | Reference for the **discord voice pipe** wiring only. |
-| **`music` / `maturin`** | Minimal `commands/music/player.py` (just joins VC). | Reference for VC‑join only. |
-| **`youtube-dial`** | YouTube "lounge"/DIAL casting (`session.py`), unrelated to Spotify. | Ignore for this feature. |
+| **`librespot`** | Python "microservice": `music/handler.py` (correct `Session.Builder().oauth(cb)`), `music/librespot_manager.py` (token scaffold + **broken** `user_pass(access_token)`, stub play/pause), `music/server.py` (OAuth callback server), Cog `player.py`, `SpotifyToken` model (migration 0047). | **Best conceptual match.** Reuse the model shape, refresh scaffolding, and the callback‑server idea. Fix §2.1. Playback is all stubs — write it. |
+| **`headless-spotify`** | Node service using the **Web Playback SDK** in headless Chrome (`puppeteer-stream`) → ffmpeg; Web‑API OAuth; `Member.spotify` field (migration 0048). | Alternative that also yields a real Connect device but is heavy (a browser per stream, Widevine). Keep as fallback only if librespot proves unstable. |
+| **`dyspotify`** | Vendored **Rust** librespot + `helpers/spotify.py` shelling `librespot --username/--password … -B pipe \| ffmpeg`. | Deprecated password login; heavy. Reference for the ffmpeg pipe only. |
+| **`librespot-raw`** | `helpers/pyaudio.py`: `librespot` binary → `FFmpegPCMAudio(pipe=True)` → `vc.play`. | Reference for the **discord voice pipe** wiring. |
+| **`music` / `maturin`** | `commands/music/player.py` VC‑join stub. | Reference for VC join. |
+| **`youtube-dial`** | YouTube DIAL casting. | Unrelated — ignore. |
 
-**Reusable, concretely:**
-- `SpotifyToken` model shape from `librespot` migration 0047 (adapt — see §6).
-- The ffmpeg‑pipe → `discord.FFmpegPCMAudio`/`PCMAudio` pattern from `librespot-raw`/`dyspotify`.
-- The token refresh logic in `librespot_manager.py` (but keyed to librespot creds, not Web API).
+**Concretely reusable:** `SpotifyToken` model shape (adapt, §6); ffmpeg‑pipe→discord voice
+pattern (`librespot-raw`/`dyspotify`); the async ORM helper style in
+`headless-spotify:helpers/spotifyStore.py`.
 
 ---
 
 ## 4. Recommended architecture
 
-### Option A (RECOMMENDED, MVP) — Per‑user librespot + paste‑back PKCE OAuth + URI streaming
+### RECOMMENDED — librespot‑python, per‑user OAuth, real Connect receiver
 ```
-Discord user ──,play──▶ bot (discord.Client, main.py router)
-   │                        │
-   │  (if unlinked)         ├─ build librespot OAuth URL (keymaster + PKCE)  ── reply link
-   │◀── login link ────────┘
-   │  authorize @ Spotify → redirect 127.0.0.1:5588 (fails) → user copies code
-   ├── paste code (DM/modal) ─▶ bot: OAuth.set_code() → request_token() → get_credentials()
-   │                                     └─ persist reusable creds (DB/file) per user
-   └─ bot: Session.Builder().stored_file(creds) → content_feeder().load(track_id, Vorbis…)
-             → Ogg/Vorbis stream → ffmpeg (→ s16le 48k stereo) → discord voice (PCMAudio) ─▶ VC
-   track resolution (query → spotify:track:…) via Web API search (client‑credentials app token)
+Discord user ──,play──▶ bot (discord.Client router in main.py)
+   │ (unlinked)          ├─ build librespot OAuth URL (keymaster + PKCE)  ── reply login link
+   │◀── login link ──────┘
+   │  authorize @ Spotify → capture code via (a) public callback / (b) paste-back
+   ├── code ─▶ OAuth.set_code()→request_token()→get_credentials()→save_creds()  ──► persist blob (§6)
+   │
+   └─ Session.Builder().stored_file(blob).create()
+         ├─ DealerClient → wss dealer  ──────────────┐  remote control from user's Spotify app
+         ├─ put_connect_state → device "Discord:#ch" │  (transfer/play/pause/skip/seek/queue)
+         ├─ on command → content_feeder().load(uri, VorbisOnlyAudioQuality(VERY_HIGH), …)
+         │        → Ogg/Vorbis stream → ffmpeg (s16le 48k stereo) → discord voice (PCMAudio) ─▶ VC
+         └─ put_connect_state (report position/track/state)  ◀─ keep Spotify UI in sync
+   search / auto-transfer via Web API using session.tokens().get(<scope>)
 ```
-- **Pros:** honours "librespot + login link"; no headless browser; light; per‑user account.
-- **Cons:** paste‑back UX (§2.3); not a real remotely‑controllable Connect device (§2.4);
-  one active stream per guild; blocking I/O must be offloaded (§8); ToS grey area (§14).
+- Ship **Mode B** (command‑driven URI player: OAuth → creds → `content_feeder` → VC) first as a
+  milestone, then layer **Mode A** (dealer + `put_connect_state` receiver loop) on top.
 
-### Option B (ALTERNATIVE) — Headless Web Playback SDK (the `headless-spotify` branch)
-Use *your own* registered app, real Web‑API OAuth (`streaming` scope), a public HTTPS
-callback (clean redirect, no paste‑back), and a headless Chrome running the Web Playback SDK;
-capture audio via `puppeteer-stream` → ffmpeg → VC. This is the **only** way to get a genuine
-Connect device with a smooth login link.
-- **Pros:** real Connect device; clean OAuth redirect; uses your app.
-- **Cons:** a full browser per active stream (heavy RAM/CPU), Widevine/EME setup, brittle,
-  Node service alongside the Python bot. Not recommended as the first deliverable.
-
-### Rejected
-- **Web‑API token → librespot** (the `librespot` branch's core idea): impossible (§2.1).
-- **Zeroconf Connect over the internet:** LAN‑only (§2.4).
-- **Your own client_id in librespot OAuth:** AP rejects non‑first‑party tokens (§2.1/§2.3).
-
-**Implement Option A.** Keep Option B documented for the user's decision (§16).
+### Rejected / fallback
+- **Web‑API token → librespot:** impossible (§2.1). *(the `librespot` branch's core mistake)*
+- **Own client_id in librespot OAuth:** AP rejects non‑first‑party tokens (§2.1).
+- **Headless Web Playback SDK (`headless-spotify`):** viable fallback for a real Connect device
+  if librespot‑python proves too unstable, but much heavier (browser per stream). Not first.
 
 ---
 
-## 5. OAuth flow specification (Option A)
+## 5. OAuth flow specification
 
 ### 5.1 Per‑user OAuth object
-For each linking user, construct librespot‑python's `OAuth` (from `librespot.oauth`) so that:
-- `client_id` = librespot **keymaster** id (the library's default — do **not** override with
-  your own app id).
-- `redirect_uri` = `http://127.0.0.1:5588/login` (library default; it only needs to *match* at
-  token exchange, no server runs).
-- PKCE verifier/challenge are generated by the library; **store the verifier** with the pending
-  request (it is needed by `request_token()`).
-- Scopes: use the library default set (it already requests a broad set incl. `streaming`).
+Construct `librespot.oauth.OAuth(keymaster_client_id, redirect_url, callback)` per linking user.
+Keep the instance (it holds the PKCE `code_verifier`) or persist `{code_verifier, redirect_url,
+created_at}` keyed by Discord user id with a short TTL (≈10 min) for restart durability. Use
+`set_scopes(...)` if you need to trim/extend the default scope set (the default already includes
+`streaming`).
 
-Persist a **pending‑auth** record keyed by Discord user id: `{oauth_state, code_verifier,
-created_at}` with a short TTL (e.g. 10 min). (If you construct one `OAuth` instance and keep it
-in memory per user, it already holds the verifier; then you only need to survive restarts —
-store the verifier if you want durability.)
+### 5.2 Send the link
+`oauth.get_auth_url()` → reply as an embed (Spotify green `0x1DB954`) with instructions and a
+**Premium‑required** warning.
 
-### 5.2 Building & sending the link
-- Call `oauth.get_auth_url()` and send it in the `,play` reply (embed, Spotify‑green `0x1DB954`).
-- Include copy‑paste instructions and the DM/modal follow‑up (§5.3). Warn: **Premium required**.
+### 5.3 Capture the code
+Primary: **paste‑back** — a `discord.ui.Modal` "Paste code" button (interaction path) or a DM
+handled by the existing `if message.guild is None:` branch in `main.py`. Accept **either** the
+full `…/callback?code=…` URL or the bare code; parse defensively. If Phase 0 proves a hosted
+public redirect works with keymaster, add the **public‑callback** path for a seamless redirect.
 
-### 5.3 Receiving the code (two acceptable UX options)
-1. **Discord modal (preferred):** the reply has a "Paste code" button → opens a `discord.ui.Modal`
-   with a text field; on submit, extract the code. (App‑command/interaction path.)
-2. **DM paste:** instruct the user to DM the bot the redirected URL or the raw `code`. The
-   existing `on_message` DM branch (`main.py` lines ~52–62) is where you'd parse it. Extract
-   `code` from a pasted `http://127.0.0.1:5588/login?code=…` or accept the bare code.
-
-Accept **either** the full URL or the bare code; strip/parse defensively.
-
-### 5.4 Completing the exchange & persisting
+### 5.4 Complete & persist
 ```
-oauth.set_code(code)          # bypasses the local server
-oauth.request_token()         # PKCE exchange @ accounts.spotify.com/api/token
-creds = oauth.get_credentials()   # LoginCredentials (AUTHENTICATION_SPOTIFY_TOKEN)
-oauth.save_creds(<path>)      # persist reusable creds blob for this user
+oauth.set_code(code); oauth.request_token()
+creds = oauth.get_credentials()          # LoginCredentials
+oauth.save_creds(<tmp path>)             # reusable-credentials blob
 ```
-Persist to a **per‑user credentials store** (§6). Never log tokens. Confirm success to the user
-and proceed to play the pending query.
+Persist the blob to the per‑user store (§6). Never log tokens/URLs with PKCE challenges at INFO.
+Then proceed to bring up the session and play the pending query.
 
 ### 5.5 Reuse & refresh
-- On later plays: `Session.Builder().stored_file(<user creds path>).create()`. librespot
-  refreshes the underlying token itself; if a session build fails with an auth error, mark the
-  user as needing re‑link and re‑issue the login link.
+Later plays: `Session.Builder().stored_file(<blob path>).create()`. librespot refreshes the
+underlying token itself. On an auth failure, mark the user "needs re‑link" and re‑issue the link.
 
 ---
 
 ## 6. Data model
-
-Add a Django model on top of `production` (there is no `SpotifyToken` there; the `librespot`
-branch's 0047 is a good template). Store the **librespot reusable credentials**, not a Web‑API
-token.
-
+Add a Django model on `production` (there is no `SpotifyToken` there; the `librespot` branch's
+0047 is a template). Store the **librespot reusable credentials**, not a Web‑API token.
 ```python
 # storage/models.py
 class SpotifyLink(models.Model):
     member = models.OneToOneField('storage.Member', on_delete=models.CASCADE)
-    credentials = models.TextField()      # base64 reusable-creds blob from librespot save_creds
+    credentials = models.TextField()      # base64 reusable-creds blob (from save_creds)
     spotify_username = models.TextField(default='')
     scope = models.TextField(default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 ```
-- Prefer storing the credentials **blob in the DB** over a file, so it survives container
-  rebuilds (the DB is host‑postgres; see repo `CONTEXT.md`). At play time, write the blob to a
-  temp file for `stored_file(path)`, or extend the loader to accept an in‑memory blob.
-- **Encrypt at rest** if feasible (these credentials grant full account access). At minimum,
-  restrict access and keep them out of logs/backups that leave the host.
-- Add a `storage` migration. Follow the existing migration numbering on `production`.
-- Reuse the existing async ORM helper pattern (`@sync_to_async`, e.g. `helpers/spotifyStore.py`
-  on the `headless-spotify` branch) for `get_link(uid)`, `set_link(uid, blob, …)`,
-  `delete_link(uid)`.
+- Store the **blob in postgres** (survives container rebuilds — see repo `CONTEXT.md`); at play
+  time write it to a temp file for `stored_file(path)`.
+- **Encrypt at rest** if feasible — these credentials grant full account access. Keep out of
+  logs and any backup that leaves the host. Provide `,spotify unlink` to delete.
+- Add a `storage` migration following `production`'s numbering. Provide async CRUD
+  (`@sync_to_async`) in `helpers/spotifyStore.py`: `get_link`, `set_link`, `delete_link`.
 
 ---
 
-## 7. Module / file layout (Option A)
-
+## 7. Module / file layout
 Create a `music/` package (mirrors the `librespot` branch, minus its mistakes):
 
 | File | Responsibility |
 |---|---|
-| `music/oauth_flow.py` | Build per‑user librespot `OAuth`, `get_auth_url`, complete via `set_code`/`request_token`/`get_credentials`/`save_creds`. Pending‑auth store with TTL. |
-| `music/librespot_manager.py` | Load user creds → build `Session` (in executor); `load_track_stream(session, track_uri)` → Ogg/Vorbis byte stream via `content_feeder().load(TrackId.from_uri(uri), VorbisOnlyAudioQuality(AudioQuality.VERY_HIGH), False, None)`. Session cache keyed by member id. |
-| `music/search.py` | Web‑API **client‑credentials** token (bot's own app id/secret) → `search`/resolve `spotify:track|album|playlist:…` → list of track URIs + metadata. Pure Web‑API; no streaming entitlement needed for search. |
-| `music/playback.py` | Per‑guild `GuildPlayer`: VC connect/disconnect, queue, `play_next`, ffmpeg pipe → `discord.PCMAudio`/`FFmpegPCMAudio`, pause/resume/skip/stop, nowplaying/progress. |
-| `music/commands.py` | Command handlers (`handle_play`, `handle_pause`, …) wired into `main.py`'s router (§9). Not a Cog. |
+| `music/oauth_flow.py` | Per‑user `OAuth` build, `get_auth_url`, `set_code`/`request_token`/`get_credentials`/`save_creds`; pending‑auth store + TTL; code/URL parsing. |
+| `music/session_manager.py` | Creds → `Session` (built in an executor); cache by member id; expose `session.tokens()` for Web‑API calls; teardown. |
+| `music/connect_device.py` | **Mode A:** build/refresh `PutStateRequest`, register `MessageListener`/`RequestListener`, capture the dealer `connection_id`, `put_connect_state`, translate dealer commands → `GuildPlayer` actions, and report state back. |
+| `music/search.py` | Resolve `,play` query/URL → `spotify:track|album|playlist:…` via Web API (token from `session.tokens().get("user-read-private")` or client‑credentials). |
+| `music/playback.py` | Per‑guild `GuildPlayer`: VC connect/disconnect, queue, `content_feeder` → ffmpeg → `discord.PCMAudio`/`FFmpegPCMAudio`, pause/resume/skip/stop, progress. |
+| `music/commands.py` | `handle_play`, `handle_pause`, … wired into `main.py`'s router (§9). **Not a Cog.** |
 | `helpers/spotifyStore.py` | Async ORM CRUD for `SpotifyLink` (§6). |
 
-Delete/ignore the `commands/music/player.py` Cog; do not `add_cog`.
+Delete/ignore `commands/music/player.py` (Cog); do not `add_cog`.
 
 ---
 
-## 8. Playback pipeline specification
-
-- `content_feeder().load(...)` returns an object whose `.input_stream.stream()` yields
-  **Ogg/Vorbis** bytes. Do **not** call `.read()` byte‑by‑byte on the event loop.
-- Bridge to ffmpeg. Two viable wirings (pick one, prototype both in Phase 2):
-  1. **Feed the Vorbis stream to ffmpeg via stdin** and let `discord.FFmpegPCMAudio(pipe=True,
-     ...)` decode → 48 kHz/stereo/s16le. (Cleanest; mirrors `librespot-raw/helpers/pyaudio.py`.)
+## 8. Playback pipeline
+- `content_feeder().load(TrackId.from_uri(uri), VorbisOnlyAudioQuality(AudioQuality.VERY_HIGH),
+  False, None)` → object whose `.input_stream.stream()` yields **Ogg/Vorbis** bytes.
+- Bridge to ffmpeg (pick one; prototype both in Phase 2):
+  1. Feed the Vorbis stream to `discord.FFmpegPCMAudio(pipe=True, ...)` (decode → 48 kHz/stereo/
+     s16le). Cleanest; mirrors `librespot-raw/helpers/pyaudio.py`.
   2. Pump `stream()` chunks into a `subprocess` ffmpeg (`-i pipe:0 -f s16le -ar 48000 -ac 2
-     pipe:1`) from a background thread, wrap stdout in `discord.PCMAudio`. (Mirrors
-     `dyspotify`/`headless-spotify` `helpers/audio.py`.)
-- All **blocking** work (session build, `content_feeder().load`, reading the stream) runs in a
-  **thread executor** (`loop.run_in_executor`) or a dedicated thread — never inline in the
-  asyncio loop, or the gateway heartbeat (see `main.py heartbeat()`) will stall.
-- `vc.play(source, after=<cleanup/advance queue>)`; the `after` callback runs off‑loop, so
-  schedule queue advancement with `asyncio.run_coroutine_threadsafe(...)`.
-- One `GuildPlayer` per guild; refuse concurrent streams in the same guild (queue instead).
-- Clean up ffmpeg subprocess + close librespot stream on stop/disconnect/error.
+     pipe:1`) from a thread; wrap stdout in `discord.PCMAudio`. Mirrors `headless-spotify/
+     helpers/audio.py`.
+- **All blocking work** (session build, `content_feeder().load`, stream reads, dealer callbacks)
+  runs in a **thread executor** — never inline on the asyncio loop, or `main.py`'s `heartbeat()`
+  stalls and the watchdog restarts the bot.
+- `vc.play(source, after=<advance queue>)`; the `after` callback runs off‑loop, so schedule
+  queue advancement with `asyncio.run_coroutine_threadsafe(...)`.
+- One `GuildPlayer` per guild; queue rather than run concurrent streams. Clean up ffmpeg +
+  librespot stream + Connect device on stop/disconnect/error.
 
 ---
 
 ## 9. Integration with the existing bot (important)
-
-`main.py` uses **`discord.Client`** (not `commands.Bot`) with:
-- a `,`‑prefix `if/elif` router inside `on_message` (guild) and a separate DM branch,
-- an `app_commands.CommandTree` for slash commands,
-- a single asyncio loop started via `loop.create_task(client.start(TOKEN))` + `heartbeat()`.
-
-Therefore:
-- **Do not** use `commands.Cog`/`add_cog`/`load_extension` (that requires `commands.Bot`). The
-  `librespot` branch's Cog `player.py` is incompatible.
-- Add `,play` etc. as new `elif message.content.startswith(",play")` branches calling
-  `music.commands.handle_play(message, client)`, matching the existing handler signatures
-  (`async def handler(message, client)`), and register any slash variants on `tree`.
-- Route the DM **paste‑back** through the existing DM branch (`if message.guild is None:`).
-- Voice requires `discord.py[voice]` + PyNaCl + libopus loaded (`discord.opus.load_opus`
-  if not auto‑loaded). Confirm `intents` — `message_content` is already enabled; voice needs
-  the voice state intent (default intents include voice states).
+`main.py` uses **`discord.Client`** (not `commands.Bot`) with a `,`‑prefix `if/elif` router in
+`on_message` (guild + a DM branch) and an `app_commands.CommandTree`, on a single asyncio loop
+(`loop.create_task(client.start(TOKEN))` + `heartbeat()`).
+- **Do not** use `commands.Cog`/`add_cog`/`load_extension`. The `librespot` branch's Cog won't
+  load. Add `elif message.content.startswith(",play"): await music.commands.handle_play(message,
+  client)` branches matching existing `async def handler(message, client)` signatures; register
+  any slash variants on `tree`.
+- Route paste‑back through the DM branch (`if message.guild is None:`).
+- Voice: add `discord.py[voice]` + PyNaCl + libopus; call `discord.opus.load_opus(...)` if not
+  auto‑loaded. Default intents already include voice states; `message_content` is already on.
 
 ---
 
 ## 10. Dependencies & infrastructure
+`requirements.txt` (on top of `production`):
+- **Repin librespot** to `@18104622b3be02062f1f8abe8dafc396413e9784` (§0).
+- Add **`PyNaCl==1.5.0`** (voice) — currently missing.
+- `websocket-client` (dealer) is already present (`websocket-client==1.7.0`); `protobuf==3.20.1`
+  and `pycryptodomex` are present. Verify they satisfy the new librespot commit; bump if needed.
 
-Add to `requirements.txt` (on top of `production`):
-- `PyNaCl==1.5.0` (Discord voice encryption) — **currently missing**.
-- (librespot‑python is already pinned; keep the pin.)
-- Confirm `pycryptodomex` (present) and `protobuf==3.20.1` (present) satisfy librespot‑python.
-- If using ffmpeg via python wrapper, none needed — call the **ffmpeg binary**.
+`Dockerfile` (`python:3.9.13-slim`): add **`ffmpeg`** and **`libopus0`** to the `apt-get install`
+line. Keep `git` (needed for the librespot git install).
 
-Add to `Dockerfile` (`python:3.9.13-slim`, currently installs only build/gl libs):
-- `ffmpeg` (binary) and `libopus0` (Opus for discord voice). Add to the `apt-get install` line.
-- Keep `git` (already present) — needed to pip‑install librespot from the git URL.
-
-Env / config (`.env`, read via `python-dotenv` as elsewhere):
-- `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` — **only** for Web‑API **search** (client‑
-  credentials). *Not* used for librespot auth. (The bot's existing `.env` already carries a
-  Spotify client secret per repo `PLAN.md`.)
-- `SPOTIFY_DEVICE_NAME` (optional, cosmetic).
-- No public redirect URL / callback host is required for Option A.
+Env / config (`.env`, via `python-dotenv`):
+- `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` — only needed if you use client‑credentials for
+  search; can be avoided by using `session.tokens()`.
+- `SPOTIFY_DEVICE_NAME` (optional; device label prefix).
+- `SPOTIFY_REDIRECT_URI` (optional; only for the Phase‑0 public‑callback experiment, §2.4a).
 
 ---
 
-## 11. Configuration & secrets handling
-- Never commit `.env`; it is the single source of truth (repo `CONTEXT.md`).
-- Treat stored librespot credentials as **full‑account secrets**: encrypt at rest if possible,
-  exclude from any exported backup, never log. Provide `,spotify unlink` to delete them.
-- Do not print auth URLs containing PKCE challenges to shared logs at INFO level.
+## 11. Secrets handling
+- Never commit `.env` (single source of truth — `CONTEXT.md`). Treat stored librespot
+  credentials as full‑account secrets: encrypt at rest if possible, exclude from exported
+  backups, never log. `,spotify unlink` deletes them.
+- Do not log auth URLs (PKCE) or tokens at INFO.
 
 ---
 
-## 12. Command specification (signatures & acceptance)
-
+## 12. Command spec (acceptance)
 | Command | Precondition | Success | Failure messaging |
 |---|---|---|---|
-| `,play <q>` | user in a VC | joins VC, resolves query, streams/queues; posts nowplaying | not linked → login link; not in VC → prompt; no Premium → explain; no results → say so |
-| `,pause`/`,resume` | active guild player | toggles | "nothing playing" |
+| `,play <q>` | user in VC | link if needed; join; register device (A)/stream (B); nowplaying | not linked → login link; not in VC → prompt; no Premium → explain; no results → say so |
+| `,pause`/`,resume` | active player | toggles | "nothing playing" |
 | `,skip` | queue non‑empty | advances | "nothing to skip" |
-| `,stop`/`,leave` | in VC | stops, clears, disconnects | "not connected" |
-| `,queue` | — | lists items | "queue empty" |
+| `,stop`/`,leave` | in VC | stop/clear/disconnect/teardown device | "not connected" |
+| `,queue` | — | lists | "queue empty" |
 | `,nowplaying` | active | title/artist/progress | "nothing playing" |
 | `,spotify unlink` | linked | deletes creds | "not linked" |
 
-Match the reply style in the existing exploratory `player.py` (embeds, Spotify green).
+Match the embed style (Spotify green) in the exploratory `player.py`.
 
 ---
 
-## 13. Execution plan (phased, each phase independently verifiable)
+## 13. Execution plan (phased, each independently verifiable)
 
-**Phase 0 — De‑risk the linchpin (do this first, ~half a day).**
-- In a throwaway script inside the container image (Python 3.9.13, librespot pinned commit):
-  build `OAuth`, print `get_auth_url()`, authorize manually, `set_code(<pasted code>)`,
-  `request_token()`, `get_credentials()`, `save_creds()`. Then `Session.Builder().stored_file(...)
-  .create()` and `content_feeder().load(<a known track uri>, VorbisOnlyAudioQuality(VERY_HIGH),
-  False, None)` and read a few KB.
-- **Acceptance:** you obtain reusable creds via paste‑back **and** pull audio bytes for a track
-  using a **Premium** account. If this fails, stop and revisit Option B before building UX.
+**Phase 0 — De‑risk (do first).** In the container (Python 3.9.13, new librespot pin): (i) run
+librespot OAuth end‑to‑end via **paste‑back** (`get_auth_url`→`set_code`→`request_token`→
+`get_credentials`→`save_creds`) with a **Premium** account; (ii) `stored_file` → `Session` →
+`content_feeder().load(<known uri>)` and read a few KB; (iii) bring up `DealerClient`, call
+`put_connect_state`, and confirm the device appears in the Spotify app and that transferring to
+it delivers dealer command frames; (iv) test whether a **public** `redirect_url` is accepted by
+keymaster (§2.4a). **Acceptance:** creds via paste‑back, audio bytes pulled, device visible in
+the Spotify app, dealer commands observed. If (iii) fails, ship Mode B only and reconsider the
+`headless-spotify` fallback for true Connect.
 
-**Phase 1 — Data model & store.**
-- Add `SpotifyLink` model + migration; async CRUD in `helpers/spotifyStore.py`.
-- **Acceptance:** create/read/delete a link row via the async helpers.
+**Phase 1 — Data model & store.** `SpotifyLink` + migration + async CRUD. *Acceptance:* CRUD works.
 
-**Phase 2 — Playback pipeline (single track, no Discord).**
-- `music/librespot_manager.py` + `music/playback.py`: load creds → session → stream → ffmpeg
-  → write `s16le` to a file/`aplay`. Prove the pipe end‑to‑end off the event loop.
-- **Acceptance:** a 10‑second correct PCM capture of a known track.
+**Phase 2 — Audio pipeline (no Discord).** creds → session → `content_feeder` → ffmpeg → PCM to
+file. *Acceptance:* correct 10 s PCM of a known track, off the event loop.
 
-**Phase 3 — Discord voice.**
-- Add PyNaCl + ffmpeg/libopus to image; wire `vc.play(PCMAudio/FFmpegPCMAudio)`; join/leave.
-- **Acceptance:** audible playback of a hard‑coded track URI in a real VC, clean disconnect.
+**Phase 3 — Discord voice.** PyNaCl + ffmpeg/libopus in image; `vc.play`; join/leave.
+*Acceptance:* audible hard‑coded track in a real VC; clean disconnect.
 
-**Phase 4 — OAuth link UX.**
-- `music/oauth_flow.py` + pending‑auth store; `,play` issues link when unlinked; modal/DM
-  paste‑back completes and persists; then auto‑plays the pending query.
-- **Acceptance:** a fresh user links via the Discord flow and hears their track.
+**Phase 4 — OAuth link UX.** `oauth_flow.py` + pending store; `,play` issues link when unlinked;
+modal/DM paste‑back persists creds; auto‑plays pending query. *Acceptance:* a fresh user links in
+Discord and hears their track (**Mode B shippable here**).
 
-**Phase 5 — Search & queue.**
-- `music/search.py` (Web‑API client‑credentials) resolves free‑text and URLs; `GuildPlayer`
-  queue; `,pause/,resume/,skip/,stop/,queue/,nowplaying`.
-- **Acceptance:** `,play never gonna give you up` works; queueing/skip works.
+**Phase 5 — Connect receiver (Mode A).** `connect_device.py`: `PutStateRequest`, listeners,
+`connection_id`, command loop, state reporting. *Acceptance:* device shows in the Spotify app;
+play/pause/skip/seek from the app control the VC audio; the app UI reflects position/track.
 
-**Phase 6 — Hardening.**
-- Token/session refresh & re‑link on auth failure; per‑guild concurrency guards; error
-  messaging; resource cleanup; structured logging without secrets.
-- **Acceptance:** survives skip‑spam, disconnects, expired creds, and a bad query without
-  wedging the event loop (heartbeat stays fresh — see `main.py`).
+**Phase 6 — Search & queue.** `search.py` (via `session.tokens()`), `GuildPlayer` queue, the
+control commands. *Acceptance:* `,play never gonna give you up` + queue/skip work.
 
-**Phase 7 — Docs & rollout.**
-- Update `README.md`/help command; note Premium requirement and ToS caveat (§14); commit &
-  push to the designated feature branch. Do **not** open a PR unless asked.
+**Phase 7 — Hardening.** Session refresh/re‑link on auth failure; per‑guild concurrency guards;
+dealer reconnect handling; resource cleanup; secret‑safe logging; heartbeat stays fresh under
+skip‑spam/disconnects/expired creds.
+
+**Phase 8 — Docs & rollout.** Update `README.md`/help (note Premium + ToS §14); commit & push to
+the designated feature branch. **Do not open a PR unless asked.**
 
 ---
 
 ## 14. Risks, limitations, ToS
-- **Spotify ToS:** using librespot and/or streaming one account into a shared channel is a grey
-  area and can get accounts flagged/banned. Per‑user credentials (Option A) limit blast radius
-  to the consenting user. Surface this to users and the operator.
-- **Premium required** to stream full tracks (§2.5).
-- **Not a real Connect device** in the MVP (§2.4). Manage expectations in the UI/help text.
-- **librespot‑python is unofficial & can break** when Spotify changes protocols; the pin at
-  `81ecec3` is a moving target — watch for breakage on rebuilds.
-- **Resource use:** one ffmpeg + one librespot session per active guild stream; cap concurrency.
-- **Blocking calls** on the event loop are the top failure mode — enforce executor usage (§8).
+- **Spotify ToS:** librespot is unofficial; automated streaming can get accounts flagged.
+  Per‑user credentials limit blast radius to the consenting user. Surface this to users/operator.
+- **Premium required** (§2.5).
+- **No turnkey player** — the receiver loop is yours to build (§2.3); budget Phase 5 accordingly.
+- **librespot‑python is unofficial & moving** — it can break on Spotify protocol changes; pin a
+  known‑good commit and watch rebuilds.
+- **Blocking calls on the event loop** are the top failure mode — enforce executor usage (§8).
+- **Resource use** — one ffmpeg + one session (+ dealer ws) per active guild stream; cap it.
 - **Credential theft impact** is high — treat the store as sensitive (§11).
 
 ## 15. Testing
-- Unit: query→URI parsing (`music/search.py`), code/URL extraction in paste‑back, queue logic.
-- Integration: Phase 0 script kept as a smoke test; a manual checklist for the Discord flow.
-- Regression: confirm the bot's existing features and `heartbeat()` are unaffected (no blocking).
+- Unit: query→URI parsing, code/URL extraction, queue logic, `PutStateRequest` construction.
+- Integration: keep the Phase 0 script as a smoke test; manual checklist for the Discord + app
+  control flow.
+- Regression: existing features and `heartbeat()` unaffected (no blocking).
 
-## 16. Open questions for the user (resolve before/while building)
-1. **Per‑user vs shared account?** Option A links each user's own Premium account (recommended).
-   A single shared bot account is simpler but is one ToS violation for everyone and needs no
-   login link. Confirm the intent behind "login link" is genuinely per‑user.
-2. **Paste‑back UX acceptable?** The keymaster redirect can't hit our server (§2.3), so linking
-   requires copying a code (modal or DM). If a *seamless* web redirect is a hard requirement,
-   we must switch to **Option B** (headless Web Playback SDK, your own app) — heavier but a real
-   Connect device with a clean redirect.
-3. **True Connect control** (press play from the Spotify app) — is that required? If yes, only
-   Option B delivers it remotely; librespot Zeroconf is LAN‑only.
-4. **Premium** — confirm target users have Premium.
+## 16. Open questions for the user
+1. **Mode A vs B first?** Recommend shipping Mode B (command player) as an early milestone, then
+   Mode A (full Connect receiver). Confirm this ordering.
+2. **Login UX:** paste‑back is guaranteed; a seamless hosted redirect depends on Phase 0 (2.4a).
+   Confirm a public HTTPS callback host is available if we want the smooth flow.
+3. **Per‑user vs shared account:** per‑user (login link) is assumed. A single shared account is
+   simpler but one ToS liability for everyone. Confirm the intent behind the login link.
+4. **Premium:** confirm target users have Premium.
 
 ---
 
-## Appendix A — Key code references (exploratory branches)
-- `origin/librespot:music/handler.py` — correct librespot OAuth entry (`Session.Builder().oauth(cb)`).
-- `origin/librespot:music/server.py` — localhost OAuth callback server (pattern; not needed with paste‑back).
-- `origin/librespot:music/librespot_manager.py` — token mgmt scaffold; **contains the `user_pass(access_token)` mistake — do not copy that line**.
-- `origin/librespot:storage/migrations/0047_…spotifytoken.py` — `SpotifyToken` model template.
+## Appendix A — Exploratory‑branch code references
+- `origin/librespot:music/handler.py` — correct `Session.Builder().oauth(cb)` entry.
+- `origin/librespot:music/server.py` — OAuth callback‑server pattern (for §2.4a).
+- `origin/librespot:music/librespot_manager.py` — token scaffold; **contains the
+  `user_pass(access_token)` mistake — do not copy that line.**
+- `origin/librespot:storage/migrations/0047_…spotifytoken.py` — model template.
 - `origin/librespot-raw:helpers/pyaudio.py` — `librespot` → `FFmpegPCMAudio(pipe=True)` → `vc.play`.
 - `origin/dyspotify:helpers/spotify.py` — `librespot -B pipe … | ffmpeg …` subprocess pattern.
-- `origin/headless-spotify:spotify/*` + `helpers/audio.py` — full Option B reference implementation.
+- `origin/headless-spotify:spotify/*` + `helpers/audio.py` — full fallback (Web Playback SDK).
 
-## Appendix B — Canonical librespot‑python snippets
+## Appendix B — Canonical librespot‑python snippets (verified against `@18104622`, v0.0.10)
 ```python
-# Streaming a track (after credentials exist)
+# Reuse stored credentials and stream a track (run blocking parts off the event loop)
 from librespot.core import Session
 from librespot.metadata import TrackId
 from librespot.audio.decoders import AudioQuality, VorbisOnlyAudioQuality
 
-session = Session.Builder().stored_file("creds.json").create()          # reuse creds
-track_id = TrackId.from_uri("spotify:track:xxxxxxxxxxxxxxxxxxxxxx")
+session = Session.Builder().stored_file("creds.json").create()
 stream = session.content_feeder().load(
-    track_id, VorbisOnlyAudioQuality(AudioQuality.VERY_HIGH), False, None)
-# stream.input_stream.stream() -> file-like Ogg/Vorbis; pipe to ffmpeg (run off the event loop)
+    TrackId.from_uri("spotify:track:xxxxxxxxxxxxxxxxxxxxxx"),
+    VorbisOnlyAudioQuality(AudioQuality.VERY_HIGH), False, None)
+# stream.input_stream.stream() -> Ogg/Vorbis file-like; pipe to ffmpeg -> discord voice
 
-# Out-of-band OAuth (paste-back), instead of the blocking flow():
+# A Web-API token off the same session (search, transfer_playback, etc.)
+api_token = session.tokens().get("user-read-private")
+
+# Out-of-band OAuth (paste-back): build URL, take the pasted code, exchange it
 from librespot.oauth import OAuth
-oauth = OAuth(...)                 # keymaster client_id + 127.0.0.1:5588 defaults
-url = oauth.get_auth_url()         # send to the user in Discord
-# ... user authorizes, copies ?code=... back to the bot ...
-oauth.set_code(pasted_code)
+oauth = OAuth(client_id, redirect_url, oauth_url_callback=None)   # keymaster id; redirect configurable
+url = oauth.get_auth_url()          # send to the user in Discord
+oauth.set_code(pasted_code)         # skips the local callback server
 oauth.request_token()
 creds = oauth.get_credentials()
-oauth.save_creds("creds.json")     # persist reusable credentials
+oauth.save_creds("creds.json")      # persist reusable credentials
+
+# Connect device registration (Mode A) uses:
+#   session.api().put_connect_state(connection_id, PutStateRequest(...))   # register/update device
+#   session.dealer().add_message_listener(...) / add_request_listener(...) # receive remote commands
+#   librespot.proto.Connect_pb2 / Player_pb2 / TransferState_pb2 / Queue_pb2
 ```
