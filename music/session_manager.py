@@ -46,6 +46,7 @@ def build_session(credentials_json):
 
 def get_session(member_id, credentials_json):
     """Return a cached Session for member_id, building one if needed. Blocking."""
+    member_id = str(member_id)
     session = _sessions.get(member_id)
     if session is not None:
         return session
@@ -54,8 +55,13 @@ def get_session(member_id, credentials_json):
     return session
 
 
+def cache_session(member_id, session):
+    """Register an already-built Session (e.g. one built during linking) in the cache."""
+    _sessions[str(member_id)] = session
+
+
 def close_session(member_id):
-    session = _sessions.pop(member_id, None)
+    session = _sessions.pop(str(member_id), None)
     if session is None:
         return
     try:

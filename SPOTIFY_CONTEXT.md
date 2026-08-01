@@ -14,15 +14,128 @@
 Branch: `claude/spotify-connect-bot-step-1-in130u`, based directly on `production`
 (`d91273a`, the containerized/watchdog-supervised state — already includes the hosting work).
 
-**Phases 1, 2, and 3 of `SPOTIFY_CONNECT_PLAN.md` §13 are done:** data model & store, the audio
-pipeline (creds → `Session` → `content_feeder` → ffmpeg → PCM), and Discord voice (join/leave,
-`vc.play` fed by that same pipeline). Phase 0 (de-risk experiments against a live Spotify Premium
-account) was explicitly **skipped** across all three sessions — it needs interactive/live
-credentials and a real running bot this sandbox doesn't have — and is still open; see "Still
-open" below. **Phase 2's and Phase 3's own acceptance criteria (a correct 10s PCM file / an
-audible track in a real VC) are likewise unverified against a real account and a live bot for the
-same reason** — the user doing the manual final pass is expected to close that gap; what *was*
-verified without one is detailed under each phase below.
+**Phases 1–4 of `SPOTIFY_CONNECT_PLAN.md` §13 are done:** data model & store, the audio pipeline
+(creds → `Session` → `content_feeder` → ffmpeg → PCM), Discord voice (join/leave, `vc.play`), and
+now OAuth link UX — `,play` is wired into `main.py` for the first time, issues a login link when
+unlinked, accepts paste-back over DM, persists credentials, and auto-plays the track the user
+originally asked for once linked. **This is Mode B (plan §1.2) — the command-driven URI player —
+which the plan calls shippable at the end of Phase 4.** Phase 0 (de-risk experiments against a
+live Spotify Premium account) was explicitly **skipped** across all four sessions — it needs
+interactive/live credentials and a real running bot this sandbox doesn't have — and is still
+open; see "Still open" below. **The user has said they'll do a manual final pass covering
+everything that needs a real Spotify Premium account and a live bot** (Phases 0/2/3/4's live
+acceptance criteria) — what *was* verified without one is detailed under each phase below; that
+verification is thorough (dependency resolution, exact byte-level audio framing, and now full
+command-logic coverage with mocked network/Discord boundaries) but is not a substitute for it.
+
+## What was built (Phase 4)
+
+Goal per plan §13: "`oauth_flow.py` + pending store; `,play` issues link when unlinked;
+modal/DM paste-back persists creds; auto-plays pending query. Acceptance: a fresh user links in
+Discord and hears their track (Mode B shippable here)."
+
+- **`music/oauth_flow.py`**:
+  - `start_link(user_id, pending_query=None, guild_id=None, voice_channel_id=None)` — builds a
+    per-user `librespot.oauth.OAuth(KEYMASTER_CLIENT_ID, DEFAULT_REDIRECT_URL, None)`, returns
+    `get_auth_url()`. Not blocking (no network — PKCE math is local). Stores the `OAuth` instance
+    plus the query/guild/channel the user was trying to play in, keyed by
+    `str(discord_user_id)`, with a 10-minute TTL (matches plan §5.1), purged lazily on next
+    access.
+  - `KEYMASTER_CLIENT_ID` = `librespot.mercury.MercuryRequests.keymaster_client_id` (read from
+    the actual installed source, not guessed — it's the same first-party client ID
+    `Session.Builder().oauth()` uses internally).
+  - `DEFAULT_REDIRECT_URL = "http://127.0.0.1:5588/login"` — deliberately reused from
+    `Session.Builder().oauth()`'s own default flow (`librespot/core.py`), since that's a redirect
+    URI already proven accepted by the keymaster client (upstream uses it for its own
+    non-listening default). This is the plan's §2.4(b) "paste-back" path: the browser will fail
+    to load that URL after authorizing (nothing is listening on it), but the `code=` is still
+    visible in the address bar for the user to copy. **The plan's §2.4(a) public-callback
+    upgrade was not attempted** — no hosted HTTPS redirect available in this environment to test
+    whether keymaster would even accept one; paste-back is what's implemented.
+  - `parse_code(raw_text)` — accepts either a bare code or a full pasted URL/redirect, regex-pulls
+    `code=...` if present, URL-decodes it.
+  - `complete_link(user_id, raw_code_or_url)` — blocking (does `oauth.request_token()`, a real
+    network call). Pops the pending entry (raises `KeyError` if none/expired), exchanges the
+    code, then **extracts the resulting credentials via `oauth.save_creds(tmp_path)` and reads
+    the file back** rather than reaching into `OAuth`'s private (name-mangled) fields — that's
+    the only public way to get the token out, since `OAuth.__token`/`__refresh_token`/etc. are
+    real Python name-mangled attributes, not just conventionally-private. Returns
+    `(credentials_json, pending_dict)`.
+- **`music/search.py`** — `resolve_track_uri(query)`: regex-matches a direct
+  `spotify:track:<id>` URI or an `open.spotify.com/track/<id>` URL (with or without a `?si=...`
+  suffix) and returns the canonical URI, else `None`. **Free-text search via the Web API is
+  explicitly plan Phase 6, not implemented here** — `,play <song name>` currently replies that
+  only direct links/URIs work for now. This was a deliberate scope call, not an oversight: the
+  plan's own phase table assigns Web-API search to Phase 6, after Connect-receiver Phase 5.
+- **`music/commands.py`** — the handlers plan §7/§9 call for (`async def handler(message,
+  client)`, not a Cog):
+  - `handle_play` — parses the query, checks the caller is in a voice channel, checks
+    `spotifyStore.getLink`; if unlinked, calls `oauth_flow.start_link` (via executor) with the
+    query/guild/channel attached and replies with the login link + Premium notice; if linked,
+    resolves the track URI via `search.resolve_track_uri`, builds/reuses a session via
+    `session_manager.get_session` (via executor), then joins/moves voice and calls
+    `playback.play_track` through a shared `_join_and_play` helper.
+  - `handle_spotify` — `,spotify unlink` deletes the stored link and closes any cached session;
+    anything else replies with usage.
+  - `handle_spotify_pasteback` — the DM-side handler. Calls `oauth_flow.complete_link` (via
+    executor), builds a session from the fresh credentials, stores `spotify_username` (from
+    `session.username()` — a real librespot `Session` method, confirmed by reading `core.py`) via
+    `spotifyStore.setLink`, caches the session (`session_manager.cache_session`, a small addition
+    made this phase so callers don't have to reach into `session_manager._sessions` directly),
+    then checks whether the user is **still** in the voice channel they started linking from
+    (looked up live via `client.get_guild(...).get_member(...).voice`, not trusted from the
+    pending record) — if so, auto-plays the original query there (plan's "auto-plays pending
+    query"); if not, tells them to run `,play <track>` again.
+- **`main.py`** — first real wiring for this feature: `,play` and `,spotify` added to the guild
+  branch of `on_message`; the DM branch (`if message.guild is None:`) gets an
+  `elif has_pending_spotify_link(message.author.id): await handle_spotify_pasteback(...)` before
+  its `return`, per plan §9's instruction to route paste-back through the existing DM branch.
+  Nothing else in the router changed.
+- **`commands/help.py`** — added a `,help spotify` section and a one-line entry in the top-level
+  `,help` output, matching the existing per-feature help convention (every other command has one).
+  *Not* required by the plan, but cheap and consistent with the rest of the codebase.
+- **`music/session_manager.py`** — added `cache_session(member_id, session)` and normalized all
+  three cache functions (`get_session`/`cache_session`/`close_session`) to key on `str(member_id)`
+  internally, so callers can pass a raw Discord ID (`int`) without remembering to `str()` it
+  themselves — a real bug class avoided: `commands.py` and the smoke-test scripts were calling
+  these with inconsistent types before this normalization.
+
+### Deviation from the plan text worth flagging: no embeds
+Plan §5.2 suggests a Spotify-green (`0x1DB954`) `discord.Embed` for the login-link message. This
+codebase has **zero** existing uses of `discord.Embed` anywhere (checked) — every handler sends
+plain text via `message.channel.send(content)`. Followed the codebase's actual convention instead
+of the plan's aspirational one; all Phase 4 messages are plain text. Revisit only if the user
+specifically asks for richer formatting.
+
+### What was actually verified vs. not (Phase 4)
+- ✅ **Verified, thoroughly, against a real Django DB (scratch copy) with the network/Discord/
+  Spotify boundaries mocked out** — not just import-checked like earlier phases. Built a small
+  test harness (fake `discord.Message`/`discord.Client`/voice objects, `unittest.mock.patch` on
+  `session_manager.get_session`/`build_session` and `commands._join_and_play`) and exercised:
+  - `handle_play`: empty query → usage; not in a VC → prompt; unlinked → auth link sent *and* the
+    pending entry correctly records `pending_query`/`guild_id`/`voice_channel_id`; linked +
+    free-text query → "not supported yet" notice; linked + valid URI + session-build failure →
+    relink message; linked + valid URI + full success → correct "Now playing" message and
+    `_join_and_play` called with the right arguments.
+  - `handle_spotify`: `unlink` when linked → deletes and confirms (checked against the DB
+    afterward — link is actually gone); `unlink` when not linked → correct message; bare
+    `,spotify` → usage.
+  - `handle_spotify_pasteback`: no pending link → correct message; link succeeds but user has
+    left the original voice channel → linked message *without* auto-play, telling them to retry;
+    link succeeds and user is still in the channel → auto-play fires with the exact guild/channel/
+    track URI from the pending record.
+  - `oauth_flow.start_link`/`has_pending`/`complete_link`/`parse_code` directly: real (non-mocked)
+    `get_auth_url()` calls produced a URL containing the correct keymaster `client_id`;
+    `complete_link` on a nonexistent/expired pending entry raises `KeyError` as documented; the
+    10-minute TTL actually purges (verified by monkeypatching the TTL to 10ms and sleeping 50ms).
+  - `search.resolve_track_uri`: canonical URI, `open.spotify.com` URL with a `?si=...` tracking
+    param, a bare domain-less form, an unsupported free-text query, an unsupported `spotify:
+    album:...` URI, and a too-short ID all produced the expected result.
+- ❌ **NOT verified**: `oauth.request_token()` actually exchanging a real code for a real token
+  (needs a live Spotify authorization), `session.username()` against a real account, or anything
+  in Discord's own voice/gateway path. Same category of gap as every prior phase — no live
+  Spotify/Discord access in this sandbox. **This is the piece the user said they'd verify
+  manually.**
 
 ## What was built (Phase 3)
 
@@ -228,40 +341,47 @@ committed. The repo's actual runtime is Python 3.9.13 in Docker per the `Dockerf
 
 ## Still open / for the next phase(s)
 
-Per `SPOTIFY_CONNECT_PLAN.md` §13, **Phase 4 — OAuth link UX** is next: `music/oauth_flow.py` +
-pending-auth store; `,play` issues a login link when unlinked; paste-back (modal/DM) persists
-creds via `helpers/spotifyStore.setLink`; auto-plays the pending query once linked. This is also
-where `main.py` integration (plan §9) actually starts — nothing has touched `main.py` yet.
-Concretely:
+Per `SPOTIFY_CONNECT_PLAN.md` §13, **Phase 5 — Connect receiver (Mode A)** is next:
+`music/connect_device.py` — `PutStateRequest`, dealer `MessageListener`/`RequestListener`,
+capturing the dealer `connection_id`, translating dealer commands into playback actions, and
+reporting state back via `put_connect_state` so the bot shows up as a real Spotify Connect device
+controllable from the user's own Spotify app. This is a bigger lift than any phase so far — see
+plan §2.3 for what librespot-python does *not* hand you (no finished SPIRC player loop). The plan
+explicitly recommends running Phase 0's checklist for real before starting this phase, since it's
+the one that most depends on dealer/connect-state actually behaving as the plan's research
+(§2.2) predicted. Concretely, before/while starting Phase 5:
 
-- **`music/oauth_flow.py` doesn't exist yet.** Needs: build a per-user `librespot.oauth.OAuth`
-  instance (keymaster client_id is hardcoded inside `Session.Builder().oauth()` but for paste-back
-  you construct `OAuth` yourself — check how `Session.Builder().oauth()` does it in
-  `librespot/core.py` for the right client_id constant), `get_auth_url()` → reply as embed,
-  accept a pasted code or URL (parse defensively per plan §5.3), `set_code()` →
-  `request_token()` → `get_credentials()`. **Persist the same dict shape `OAuth.save_creds()`
-  writes** (`access_token`/`refresh_token`/`expires_at`/`type`/`client_id`) as JSON text into
-  `SpotifyLink.credentials` via `spotifyStore.setLink()` — that's what
-  `session_manager.build_session()` expects (see the credential-format finding under Phase 2).
-  Keep the pending-auth state (code_verifier etc.) in memory keyed by Discord user id with a
-  short TTL; `OAuth` objects aren't easily serializable, so this needs to survive only until the
-  user pastes back, not across bot restarts.
+- **Nothing about dealer/connect-state has been touched yet** — `music/session_manager.py` only
+  builds a `Session`, it doesn't do anything with `session.dealer()` or
+  `session.api().put_connect_state(...)`. All of Phase 5 is new code.
 - **Token refresh (plan §5.5) is still unresolved** — see "Consequence for reuse & refresh" under
   Phase 2. `session_manager.get_session()` currently just raises and tells the user to re-link if
-  `expires_at` has passed; decide in Phase 4 whether that's good enough for the MVP or whether
-  real refresh-token exchange is needed before shipping.
-- **No `main.py` wiring yet.** Phase 4 is where `,play` (and eventually `,pause`/`,skip`/etc.)
-  get added as `elif message.content.startswith(",play")` branches in the existing router (plan
-  §9) — not a Cog. `,spotify unlink` (plan §1.3/§12) is trivial once this exists: just
-  `await spotifyStore.deleteLink(uid)`.
-- **Phase 0 (de-risk) was never run, and neither were Phase 2's/Phase 3's own acceptance
-  criteria** (a real PCM file from a real account; an audible track in a real VC) — see each
-  phase's "What was actually verified vs. not" above. All the same underlying gap: no live
-  Spotify Premium account or running bot available in this sandbox. `music/phase2_smoke_test.py`
-  and `music/phase3_smoke_test.py` exist specifically so whoever does the manual pass (the user
-  said they'll do this) can close both gaps without writing new code — just run them and report
-  back. Worth doing **before** Phase 5 (Connect receiver) in particular, per the plan's own
-  gating, since Phase 5 builds directly on Phase 2/3 working.
+  `expires_at` has passed. A Connect receiver plausibly stays "live" (registered device) for much
+  longer than a single `,play` call, which makes token expiry more likely to actually bite during
+  Phase 5 than it was in Phase 3/4 — worth deciding on a real refresh strategy before/during this
+  phase rather than after.
+- **Free-text search (plan §7 `music/search.py`, Phase 6) still isn't implemented** —
+  `music/search.py` currently only resolves direct track URIs/URLs (see Phase 4 above). Doesn't
+  block Phase 5, but a Connect receiver is arguably more useful once `,play <song name>` works
+  too, so it may be worth sequencing Phase 6 before or alongside Phase 5 depending on what the
+  user wants to use first — flagging as a sequencing question, not a blocker.
+- **`,pause`/`,resume`/`,skip`/`,stop`/`,leave`/`,queue`/`,nowplaying` (plan §12) are still
+  unimplemented.** Phase 4 only built `,play` and `,spotify unlink`, deliberately — those other
+  commands need per-guild player *state* (currently-playing track, queue) that doesn't exist yet
+  (`music/playback.py` has no `GuildPlayer`, just stateless `join`/`leave`/`play_track`). That's
+  Phase 6 (`GuildPlayer` queue) and arguably needed before Phase 5's state-reporting can be
+  fully correct either (dealer commands like pause/skip need something to act on).
+- **Phase 0 (de-risk) was never run, and neither were Phases 2/3/4's own live acceptance
+  criteria** (a real PCM file; an audible track in a real VC; a fresh user actually linking and
+  hearing their track) — see each phase's "What was actually verified vs. not" above. All the
+  same underlying gap: no live Spotify Premium account or running bot available in this sandbox.
+  **The user has said they'll do a manual final pass to cover this.** `music/phase2_smoke_test.py`
+  and `music/phase3_smoke_test.py` are ready for that; Phase 4's own logic was verified thoroughly
+  with mocks (see above) but the live OAuth exchange and end-to-end Discord flow have not been
+  run. This is worth closing out **before** Phase 5 in particular, per the plan's own gating —
+  Phase 5 builds directly on the session/credential plumbing Phase 2/4 put in place, so if that
+  plumbing has a live-environment surprise, better to find it before adding dealer/connect-state
+  complexity on top.
 
 ## Decisions already made (don't relitigate)
 - Base branch is `production`, not `librespot` (plan §0) — confirmed still true, this branch's
@@ -270,12 +390,22 @@ Concretely:
 - Bot integration will be `,`-prefix branches in `main.py`'s existing `discord.Client`/
   `on_message` router (plan §9) — **not** `commands.Bot`/Cogs. Confirmed the router shape still
   matches: `client = discord.Client(...)`, `tree = app_commands.CommandTree(client)`,
-  `if/elif message.content.startswith(",...")` in `on_message` (`main.py`).
+  `if/elif message.content.startswith(",...")` in `on_message` (`main.py`). Now actually wired:
+  `,play` and `,spotify` in the guild branch, paste-back in the DM branch.
 - `music/session_manager.py` and `music/content_pipeline.py` functions are synchronous/blocking
   on purpose — callers run them via `run_in_executor`, they don't do their own async wrapping.
-  `music/playback.py` follows the same split (`play_track` is the one async entrypoint; the
-  actual track fetch happens in an executor).
+  `music/playback.py` and `music/oauth_flow.py`'s `complete_link` follow the same split (the
+  network/blocking calls are plain sync functions; `music/commands.py` is the only place that
+  wraps them in `run_in_executor`).
 - `music/playback.play_track()` builds `discord.FFmpegPCMAudio` directly from the librespot
   stream object (plan §8 "approach 1") rather than writing PCM to a file first — don't replace
   this with `content_pipeline.fetch_pcm()` for the Discord path, that function is for the
   no-Discord Phase 2 file-output use case only.
+- No `discord.Embed` usage — this codebase has none anywhere, so Phase 4 sent plain text to match,
+  despite the plan suggesting embeds. Keep doing that unless the user asks for embeds specifically.
+- `music/search.py` only handles direct Spotify track URIs/URLs, not free-text search — that's
+  Phase 6 by the plan's own phase table, not an oversight.
+- Session/credential caching (`session_manager._sessions`) is a plain in-process dict, not
+  persisted — acceptable for now since `SpotifyLink.credentials` in the DB is the durable copy
+  and a session gets rebuilt from it on demand; revisit only if Phase 5's dealer connections need
+  to survive bot restarts more gracefully than "rebuild from stored creds."

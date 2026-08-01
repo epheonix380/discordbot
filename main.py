@@ -43,6 +43,8 @@ from commands.gym import handleDailyGym, handleGymOptIn, sendGymMessage, handleG
 from commands.gameSubscription import subscribe, checkGameVersions
 from helpers.reminders import handleReminderCheck, addReminder,handleReminderAdd
 from commands.automagic import automagic
+from music.commands import handle_play, handle_spotify, handle_spotify_pasteback
+from music.oauth_flow import has_pending as has_pending_spotify_link
 
 @client.event
 async def on_ready():
@@ -59,6 +61,8 @@ async def on_message(message: discord.Message):
             await choices(message=message, client=client)
         elif message.content.startswith(",choices") or message.content.startswith("choices"):
             await saveChoices(message=message)
+        elif has_pending_spotify_link(message.author.id):
+            await handle_spotify_pasteback(message=message, client=client)
         return
     arr = []
     for match in re.finditer("https?\:\S+\.(png)|https?\:\S+\.(jpg)|https?\:\S+\.(jpeg)|https?\:\S+\.(gif)", message.content):
@@ -97,6 +101,10 @@ async def on_message(message: discord.Message):
         await handleReminderAdd(message=message)
     elif message.content.startswith(",subscribe"):
         await subscribe(message=message)
+    elif message.content.startswith(",play"):
+        await handle_play(message=message, client=client)
+    elif message.content.startswith(",spotify"):
+        await handle_spotify(message=message, client=client)
     elif message.content.startswith(",test") and (str(message.author.id)) == "218174413604913152":
         await checkGameVersions(client=client)
     await addGuildActivity(message.guild.id, message, is_nsfw)

@@ -38,6 +38,13 @@ async def helpHandler(message:discord.Message):
             ```,gym register``` register for the exercise challenge!
             ```,gym status``` gives you the current stats for your gymming sessions and how much youu owe
             """)
+        elif (instructions[1] == "spotify"):
+            await message.channel.send("""
+            ```,play <spotify track link or URI>``` join your voice channel and play a Spotify track. Requires **Spotify Premium**.
+            If you haven't linked your Spotify account yet, this sends you a login link -- authorize it, then DM me the `code=` from the address bar and I'll link you and start playing.
+            ```,spotify unlink``` remove your linked Spotify account from the bot
+            Note: right now this only plays direct track links/URIs (e.g. an open.spotify.com/track/... link) -- searching by song name is coming soon.
+            """)
     else:
         await message.channel.send("""
         Welcome to Big Tiddy goth GF
@@ -56,5 +63,7 @@ async def helpHandler(message:discord.Message):
         ,gym\n
         Pinging voice channels: These commands help you ping all the members of a specific voice channel, please note this is a discord command
         /ping\n
+        SPOTIFY: Play a Spotify track in your voice channel (Premium required). Use ,help spotify for more info
+        ,play\n
         """)
     await message.delete()
