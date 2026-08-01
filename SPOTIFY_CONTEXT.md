@@ -14,19 +14,204 @@
 Branch: `claude/spotify-connect-bot-step-1-in130u`, based directly on `production`
 (`d91273a`, the containerized/watchdog-supervised state — already includes the hosting work).
 
-**Phases 1–4 of `SPOTIFY_CONNECT_PLAN.md` §13 are done:** data model & store, the audio pipeline
-(creds → `Session` → `content_feeder` → ffmpeg → PCM), Discord voice (join/leave, `vc.play`), and
-now OAuth link UX — `,play` is wired into `main.py` for the first time, issues a login link when
-unlinked, accepts paste-back over DM, persists credentials, and auto-plays the track the user
-originally asked for once linked. **This is Mode B (plan §1.2) — the command-driven URI player —
-which the plan calls shippable at the end of Phase 4.** Phase 0 (de-risk experiments against a
-live Spotify Premium account) was explicitly **skipped** across all four sessions — it needs
-interactive/live credentials and a real running bot this sandbox doesn't have — and is still
-open; see "Still open" below. **The user has said they'll do a manual final pass covering
-everything that needs a real Spotify Premium account and a live bot** (Phases 0/2/3/4's live
-acceptance criteria) — what *was* verified without one is detailed under each phase below; that
-verification is thorough (dependency resolution, exact byte-level audio framing, and now full
-command-logic coverage with mocked network/Discord boundaries) but is not a substitute for it.
+**Phases 1–5 of `SPOTIFY_CONNECT_PLAN.md` §13 are done:** data model & store, the audio pipeline
+(creds → `Session` → `content_feeder` → ffmpeg → PCM), Discord voice (join/leave, `vc.play`),
+OAuth link UX (Mode B — command-driven URI player — the plan's own "shippable" milestone), and
+now the Connect receiver (Mode A): the bot registers as a real Spotify Connect device, and
+transfer/play/pause/resume from the user's own Spotify app are wired to actually control the
+Discord voice playback. Phase 0 (de-risk experiments against a live Spotify Premium account) was
+explicitly **skipped** across all five sessions — it needs interactive/live credentials and a
+real running bot this sandbox doesn't have — and is still open; see "Still open" below. **The
+user has said they'll do a manual final pass covering everything that needs a real Spotify
+Premium account and a live bot** (Phases 0/2/3/4/5's live acceptance criteria) — what *was*
+verified without one is detailed under each phase below. For Phase 5 specifically, that
+verification is unusually deep given the stakes (see below — it caught and fixed two real bugs,
+one in this bot's own new code and one in the librespot-python library itself) but it is still
+not a substitute for actually watching a device appear in a real Spotify app and controlling it.
+
+## What was built (Phase 5)
+
+Goal per plan §13: "`connect_device.py`: `PutStateRequest`, listeners, `connection_id`, command
+loop, state reporting. Acceptance: device shows in the Spotify app; play/pause/skip/seek from the
+app control the VC audio; the app UI reflects position/track."
+
+### Critical finding: a real cross-user bug in librespot-python itself
+Reading `librespot/core.py`'s `DealerClient` directly (not assumed): `__message_listeners`,
+`__request_listeners`, and their locks are declared at **class-body scope**, and `__init__` never
+assigns them on `self`. Every `DealerClient` instance therefore shares the exact same dict
+objects. This bot creates one `Session`/`DealerClient` per linked Discord user — with the bug
+left alone, a Connect command delivered on user A's dealer websocket would fan out to **every**
+listener ever registered by **any** user's `DealerClient`, including user B's, since
+`on_message`/`on_request` never receive anything identifying which session's socket the frame
+arrived on. Left unfixed, this would have meant one user's Spotify Connect commands could reach
+and control another user's Discord playback. **Verified the bug exists** with two real
+(unmocked) `DealerClient` instances before writing any fix (`d1.__message_listeners['marker']`
+was visible from `d2`). `music/connect_device.py`'s `_isolate_dealer_listener_state()` fixes it
+by giving each dealer instance fresh dicts, called once per `ConnectDevice` construction; made
+idempotent (only replaces a dict that's still the shared class-level object) after a test caught
+that constructing a second `ConnectDevice` against an already-isolated dealer would otherwise
+silently wipe out the first one's registrations. Both the bug and the fix are covered by
+dedicated tests (see below) — this isn't a "should be fine" claim, it's demonstrated.
+
+### Another packaging bug found (and worked around)
+`librespot/proto/TransferState_pb2.py` (needed to parse Spotify's "transfer" command, i.e. what
+fires when a user picks this device from their Spotify app) does `import ContextPlayerOptions_pb2`
+— an old-style **bare** import left over from the generated-code's original Python 2 layout —
+instead of a relative/package import. `from librespot.proto import TransferState_pb2` raises
+`ModuleNotFoundError` outright. Same bug affects `Playback_pb2`, `Queue_pb2`, `Session_pb2`,
+`Context_pb2`, `ContextPage_pb2`, `Canvaz_pb2` (checked: none of the others Phase 5 needs).
+Worked around in `music/connect_device.py` by adding `librespot/proto`'s own directory to
+`sys.path` once at import time (verified this makes the import succeed) — contained to this one
+module, doesn't touch the installed package.
+
+### `music/connect_device.py`
+- `ConnectDevice(MessageListener, RequestListener)` — one per linked-and-playing member, wraps
+  their `Session`:
+  - Builds the initial `Connect.DeviceInfo`/`Capabilities` (fields verified against the actual
+    installed `Connect_pb2` — `can_play`, `can_be_player`, `is_controllable`, `is_observable`,
+    `supports_transfer_command`, `volume_steps`, etc. — cross-checked against the **reference
+    field-filling pattern** in librespot-python's own `librespot_player/__init__.py`, a sketch
+    that ships in the same GitHub repo but is dead code — never imported by the installed
+    package, and its own listener classes never override `on_message`/`on_request` at all, just
+    inherit the no-op base stubs. It's a useful reference for *what fields to fill*, not a working
+    implementation to call into — confirms the plan's §2.3 claim that there's no finished
+    receiver here.
+  - Registers as a message listener on `hm://pusher/v1/connections/` (delivers the dealer
+    `connection_id`, via the `Spotify-Connection-Id` header — needed for every `put_connect_state`
+    call), `hm://connect-state/v1/connect/volume`, `hm://connect-state/v1/cluster`; and as a
+    request listener on `hm://connect-state/v1/` (URIs taken from the same
+    `librespot_player` reference).
+  - On receiving the connection_id, immediately PUTs an initial `NEW_DEVICE` state — this is what
+    makes the device appear in the user's Spotify app.
+  - `on_request` dispatches by `command["endpoint"]`: `"transfer"` → parses a `TransferState`
+    protobuf out of the command's base64 `data` field and calls `handler.on_transfer(track_uri,
+    position_ms, is_paused)`; `"play"`/`"resume"` → `handler.on_resume()`; `"pause"` →
+    `handler.on_pause()`; `"skip_next"`/`"skip_prev"`/`"seek_to"` → logged and reported as
+    `DEVICE_DOES_NOT_SUPPORT_COMMAND` (no queue or seek support yet — Phase 6); anything else is
+    logged in full and also reported as unsupported, **on purpose**, so real dealer traffic that
+    doesn't match my assumptions about Spotify's Connect command shapes shows up clearly in logs
+    instead of silently doing nothing.
+  - Exceptions from `handler` methods are caught and reported as `UPSTREAM_ERROR` — a bad command
+    can't crash librespot's dealer worker thread.
+  - `put_state(reason, is_playing, is_paused, track_uri, position_ms)` builds and sends a
+    `PutStateRequest`; safely no-ops (with a log) if called before a `connection_id` is known.
+- **The Spotify Connect wire protocol for commands (the exact JSON shape behind
+  `command["endpoint"]` and its args) is based on general community knowledge of the Connect/SpConn
+  protocol (as implemented in projects like go-librespot), not on anything verified from source
+  in this session** — librespot-python itself ships no working example of it (see above). This is
+  the single biggest unverified assumption in Phase 5. `on_request` logs every raw command
+  unconditionally before dispatch specifically so the first real session against a live account
+  self-documents whether the assumed shape (`endpoint`, `data` for transfer) is actually right.
+
+### `music/commands.py` — wiring Connect into the existing `,play` flow
+- `ConnectCommandHandler` — implements the `on_transfer`/`on_resume`/`on_pause` interface
+  `ConnectDevice` calls. These run on **librespot's dealer worker thread**, never the asyncio
+  loop, so every Discord-facing action is scheduled via
+  `asyncio.run_coroutine_threadsafe(coro, self.loop)` and waited on synchronously with
+  `.result()` — safe because the calling thread isn't the loop thread, and it lets a real
+  `SUCCESS`/`UPSTREAM_ERROR` propagate back to `ConnectDevice.on_request` (and from there, back
+  to Spotify) instead of firing-and-forgetting.
+  - `on_transfer`: looks up which voice channel the member is currently in by scanning **every
+    guild the bot shares with them** (`_find_member_voice_channel` — a transfer command carries
+    no Discord context at all, just a track URI, so this is the only way to find where to play
+    it), joins/plays there, and starts a periodic state-report loop.
+  - `on_resume`/`on_pause`: act on the voice client for whatever guild this member's session was
+    last active in (`self.guild_id`, updated by both `on_transfer` and normal `,play`), then
+    report state.
+  - A background `_report_loop()` task calls `put_state(PLAYER_STATE_CHANGED, ...)` every 5s
+    while a track is "current" for this member, computing position from a `time.monotonic()`
+    baseline set whenever playback starts/resumes/pauses. This is what's meant to satisfy "the
+    app UI reflects position/track" — it's a plain timer-based estimate (assumes real-time
+    playback with no drift/buffering compensation), not something driven by actual audio-frame
+    progress.
+- `handle_play`'s existing success path (normal `,play`, no Connect command involved) now also
+  calls `_ensure_connect_device(...)` and `handler.note_manual_play(guild_id, track_uri)` after
+  starting playback, so a device registers and the app's UI/controls work even if the user never
+  transfers to it — and so a pause/resume sent from the app *right after* a manual `,play` has
+  somewhere to act (`guild_id`/`current_track_uri` would otherwise stay `None` until a transfer
+  happened). **Wrapped in its own try/except** — a Connect-registration failure is logged but
+  never blocks the "Now playing" reply; audio already started, that's the part that matters most.
+  Same wiring added to `handle_spotify_pasteback`'s auto-play-after-linking path.
+- `,spotify unlink` now also calls `_close_connect_device(member_id)`, which cancels the report
+  task and unregisters the dealer listeners, alongside the existing session close.
+- `session_manager.build_session()` now sets `device_name="Discord Bot"` and
+  `device_type=Connect.DeviceType.SPEAKER` (previously left at librespot's own defaults,
+  `"librespot-python"`/`COMPUTER`) — cosmetic, but it's what actually shows up in the user's
+  Spotify app once a device is registered, so worth getting right. Also exported as
+  `session_manager.DEFAULT_DEVICE_NAME` for `commands.py` to reuse.
+
+### What was actually verified vs. not (Phase 5)
+This phase had the highest risk of "looks plausible, is subtly wrong" of any phase so far — real
+protocol code with real concurrency, and I can't run it against Spotify's actual dealer. So
+verification went further than previous phases, specifically to catch the class of bug that
+*would* be catchable without a live account:
+- ✅ **Verified the actual library bug**: two unmocked `librespot.core.DealerClient` instances
+  demonstrably share listener state before any fix; after
+  `_isolate_dealer_listener_state()`, they don't (checked both message and request listener
+  dicts). Also verified the fix is idempotent (a second isolate call on an already-isolated
+  dealer doesn't wipe existing registrations) — this specific idempotency bug was caught by an
+  earlier version of the test itself (it used one shared fake dealer across multiple
+  `ConnectDevice`s and hit a real `KeyError` in `close()`), then fixed and re-verified.
+- ✅ **Verified `ConnectDevice`'s protocol logic** end-to-end with a fake session/dealer: initial
+  `NEW_DEVICE` `put_state` fires correctly once a `connection_id` arrives via the pusher message
+  (with the right `device_info` fields); a **real** `TransferState` protobuf, constructed and
+  base64-encoded exactly like a real "transfer" command's `data` field, correctly decodes and
+  reaches `handler.on_transfer` with the right track URI/position/paused state; pause/resume
+  dispatch correctly; unknown/unimplemented endpoints correctly return
+  `DEVICE_DOES_NOT_SUPPORT_COMMAND`; a handler exception is caught and returns `UPSTREAM_ERROR`
+  without crashing; `put_state` before a `connection_id` is known safely no-ops; `close()` removes
+  listeners cleanly.
+- ✅ **Verified the thread↔asyncio bridge for real**, not mocked: ran an actual `asyncio` event
+  loop on its own background thread, called `ConnectCommandHandler.on_transfer`/`on_pause`/
+  `on_resume` from a **different** thread (standing in for librespot's dealer worker thread), and
+  confirmed the Discord-facing coroutine actually executed on the loop's thread (compared thread
+  identities), that exceptions raised inside the coroutine propagate back across the thread
+  boundary to the calling thread synchronously, and that position math advances correctly with
+  real elapsed wall-clock time. **This caught a real bug**: `ConnectCommandHandler.close()`
+  originally called `self._report_task.cancel()` directly — `asyncio.Task.cancel()` isn't
+  documented as thread-safe, and the test (calling `close()` from a non-loop thread) exposed that
+  the cancellation didn't reliably take effect. Fixed by routing it through
+  `self.loop.call_soon_threadsafe(task.cancel)`; re-verified the task actually gets cancelled.
+- ✅ **Verified the `,play` integration doesn't regress Phase 4**: re-ran (an expanded version of)
+  Phase 4's mocked test suite against the Phase-5-modified `commands.py` — empty query, not-in-VC,
+  unlinked, unsupported query, and session-build-failure paths all still behave identically.
+  Additionally verified the new integration points: `_ensure_connect_device` is idempotent per
+  member (doesn't rebuild `ConnectDevice` on every `,play`), `_close_connect_device` actually
+  closes and removes both the handler and device, and — importantly — **a Connect-device
+  registration failure never blocks the "Now playing" reply or the audio itself**, since it's
+  wrapped in its own try/except separate from the playback try/except.
+- ❌ **NOT verified, and can't be from this sandbox**: the actual JSON shape of real Spotify
+  Connect commands (the biggest open risk, flagged above), whether the device genuinely appears
+  in a real Spotify app, whether `put_connect_state` calls are accepted (any number of subtle
+  protobuf-field mistakes would only surface as an HTTP error from Spotify's backend, which
+  `ApiClient.put_connect_state` currently only logs a warning for — see "Known limitations"),
+  and whether transfer/play/pause/resume from a real app actually drives the VC audio end to end.
+  This is exactly what the user's manual pass needs to cover, and now that a device actually gets
+  registered, it's also the first phase where that pass can meaningfully happen.
+
+### Known limitations (not bugs, deliberate scope decisions)
+- **No skip/seek/queue.** Explicitly deferred to Phase 6 (`GuildPlayer` queue) — `on_request`
+  reports these as unsupported rather than pretending to handle them.
+- **State reporting doesn't know when a track ends naturally.** `playback.py`'s `after` callback
+  (fired when `content_pipeline`'s audio source runs out) doesn't currently notify
+  `ConnectCommandHandler`, so if a track finishes without `,spotify unlink` or another Connect
+  command happening, the periodic report loop keeps reporting the **last known** (now stale)
+  playing state indefinitely. Wiring `playback.play_track`'s `after` into the handler is
+  straightforward but is genuinely Phase 6 territory (queue/"what plays next" logic lives there)
+  — flagging as a known gap rather than fixing it here.
+- **`ApiClient.put_connect_state` only logs a warning on non-200 responses** (checked in
+  `librespot/core.py`) rather than raising — so a malformed `PutStateRequest` (e.g. a protobuf
+  field I got wrong, like `track.provider = "context"`, a value chosen from general Connect
+  protocol familiarity rather than verified against source) would currently fail *silently* from
+  this bot's perspective. Nothing to fix without live traffic to observe what actually gets
+  rejected; noting it so it's not mistaken for "it worked" if the device never appears.
+- **One `ConnectDevice`/one Spotify Connect device per linked member, not per guild/channel.**
+  A member's librespot `Session` (and thus their Connect device identity) is created once and
+  reused across guilds (see Phase 2/4 decisions) — the device shows as one persistent "Discord
+  Bot" entry in their Spotify app regardless of which server they're using it from, not a
+  per-channel device as plan §1.1 step 4's example ("Discord: #general") suggests. Simpler and
+  consistent with the existing per-member session cache; revisit only if the user specifically
+  wants per-channel device identities.
 
 ## What was built (Phase 4)
 
@@ -341,47 +526,44 @@ committed. The repo's actual runtime is Python 3.9.13 in Docker per the `Dockerf
 
 ## Still open / for the next phase(s)
 
-Per `SPOTIFY_CONNECT_PLAN.md` §13, **Phase 5 — Connect receiver (Mode A)** is next:
-`music/connect_device.py` — `PutStateRequest`, dealer `MessageListener`/`RequestListener`,
-capturing the dealer `connection_id`, translating dealer commands into playback actions, and
-reporting state back via `put_connect_state` so the bot shows up as a real Spotify Connect device
-controllable from the user's own Spotify app. This is a bigger lift than any phase so far — see
-plan §2.3 for what librespot-python does *not* hand you (no finished SPIRC player loop). The plan
-explicitly recommends running Phase 0's checklist for real before starting this phase, since it's
-the one that most depends on dealer/connect-state actually behaving as the plan's research
-(§2.2) predicted. Concretely, before/while starting Phase 5:
+Per `SPOTIFY_CONNECT_PLAN.md` §13, **Phase 6 — Search & queue** is next: `music/search.py`'s
+free-text search via the Web API (`session.tokens()`), a real `GuildPlayer` queue in
+`music/playback.py`, and the remaining control commands (`,pause`/`,resume`/`,skip`/`,stop`/
+`,leave`/`,queue`/`,nowplaying`). Concretely:
 
-- **Nothing about dealer/connect-state has been touched yet** — `music/session_manager.py` only
-  builds a `Session`, it doesn't do anything with `session.dealer()` or
-  `session.api().put_connect_state(...)`. All of Phase 5 is new code.
+- **This is also, realistically, when Phase 5's untested assumptions get their first real
+  chance to be validated or corrected** — a `,play <song name>` that actually resolves via search
+  makes manual testing far more natural than requiring a raw track URI, and `on_request`'s
+  unconditional raw-command logging (Phase 5) means the first live dealer session will surface
+  whether the assumed `endpoint`/`data` command shape is right. If the user's manual pass happens
+  before Phase 6 work starts, check the logs from that pass for any `"Unhandled Connect
+  endpoint"` warnings before trusting Phase 5's command dispatch is complete.
+- **`music/playback.py` still has no `GuildPlayer`** — just stateless `join`/`leave`/
+  `play_track`. Phase 6's queue needs real per-guild state (current track, queue, position) that
+  Phase 5's `ConnectCommandHandler` also approximates ad hoc (`current_track_uri`, `is_paused`,
+  a monotonic-clock position estimate) — worth unifying rather than maintaining two parallel
+  notions of "what's currently playing." `ConnectCommandHandler.on_request`'s `skip_next`/
+  `skip_prev`/`seek_to` handling (currently a deliberate "not supported yet" reply) should get
+  wired to whatever `GuildPlayer` ends up exposing.
+- **The natural-end-of-track gap flagged under Phase 5** ("Known limitations" above) — wire
+  `playback.play_track`'s `after` callback to notify `ConnectCommandHandler` (or whatever
+  `GuildPlayer` becomes) so Connect state reporting doesn't keep claiming a finished track is
+  still playing. This is exactly the kind of thing a real queue/state object should own.
 - **Token refresh (plan §5.5) is still unresolved** — see "Consequence for reuse & refresh" under
-  Phase 2. `session_manager.get_session()` currently just raises and tells the user to re-link if
-  `expires_at` has passed. A Connect receiver plausibly stays "live" (registered device) for much
-  longer than a single `,play` call, which makes token expiry more likely to actually bite during
-  Phase 5 than it was in Phase 3/4 — worth deciding on a real refresh strategy before/during this
-  phase rather than after.
-- **Free-text search (plan §7 `music/search.py`, Phase 6) still isn't implemented** —
-  `music/search.py` currently only resolves direct track URIs/URLs (see Phase 4 above). Doesn't
-  block Phase 5, but a Connect receiver is arguably more useful once `,play <song name>` works
-  too, so it may be worth sequencing Phase 6 before or alongside Phase 5 depending on what the
-  user wants to use first — flagging as a sequencing question, not a blocker.
-- **`,pause`/`,resume`/`,skip`/`,stop`/`,leave`/`,queue`/`,nowplaying` (plan §12) are still
-  unimplemented.** Phase 4 only built `,play` and `,spotify unlink`, deliberately — those other
-  commands need per-guild player *state* (currently-playing track, queue) that doesn't exist yet
-  (`music/playback.py` has no `GuildPlayer`, just stateless `join`/`leave`/`play_track`). That's
-  Phase 6 (`GuildPlayer` queue) and arguably needed before Phase 5's state-reporting can be
-  fully correct either (dealer commands like pause/skip need something to act on).
-- **Phase 0 (de-risk) was never run, and neither were Phases 2/3/4's own live acceptance
+  Phase 2. A live Connect device plausibly stays registered far longer than a single `,play`
+  call, so this is more likely to actually bite now than in earlier phases. Still no auto-refresh;
+  `session_manager.get_session()` just raises and tells the user to re-link on an expired token.
+- **Phase 0 (de-risk) was never run, and neither were Phases 2/3/4/5's own live acceptance
   criteria** (a real PCM file; an audible track in a real VC; a fresh user actually linking and
-  hearing their track) — see each phase's "What was actually verified vs. not" above. All the
-  same underlying gap: no live Spotify Premium account or running bot available in this sandbox.
-  **The user has said they'll do a manual final pass to cover this.** `music/phase2_smoke_test.py`
-  and `music/phase3_smoke_test.py` are ready for that; Phase 4's own logic was verified thoroughly
-  with mocks (see above) but the live OAuth exchange and end-to-end Discord flow have not been
-  run. This is worth closing out **before** Phase 5 in particular, per the plan's own gating —
-  Phase 5 builds directly on the session/credential plumbing Phase 2/4 put in place, so if that
-  plumbing has a live-environment surprise, better to find it before adding dealer/connect-state
-  complexity on top.
+  hearing their track; a device appearing in a real Spotify app and responding to app controls) —
+  see each phase's "What was actually verified vs. not" above. All the same underlying gap: no
+  live Spotify Premium account or running bot available in this sandbox. **The user has said
+  they'll do a manual final pass to cover this.** `music/phase2_smoke_test.py` and
+  `music/phase3_smoke_test.py` are ready for that; Phase 4/5's own logic was verified unusually
+  thoroughly with mocks and, for Phase 5, real (unmocked) library objects where it mattered most
+  (see above) — including catching and fixing two real bugs (one in librespot-python itself, one
+  in this bot's own thread-safety) that only surfaced *because* of that testing. None of that
+  substitutes for watching a real device show up in a real Spotify app.
 
 ## Decisions already made (don't relitigate)
 - Base branch is `production`, not `librespot` (plan §0) — confirmed still true, this branch's
@@ -409,3 +591,17 @@ the one that most depends on dealer/connect-state actually behaving as the plan'
   persisted — acceptable for now since `SpotifyLink.credentials` in the DB is the durable copy
   and a session gets rebuilt from it on demand; revisit only if Phase 5's dealer connections need
   to survive bot restarts more gracefully than "rebuild from stored creds."
+- `music/connect_device.py` always calls `_isolate_dealer_listener_state()` on a session's dealer
+  before registering listeners — **required**, not optional hardening; without it, multi-user
+  Connect state is actively broken (see Phase 5's "critical finding"). Don't remove it as
+  "unnecessary defensiveness" without re-reading why it's there.
+- One `ConnectDevice` per linked member (not per guild/channel), cached alongside their session
+  in `music/commands.py`'s `_connect_devices`/`_connect_handlers`, torn down together on
+  `,spotify unlink`. A member's Spotify Connect device identity is stable across guilds, matching
+  the existing per-member session cache — don't build per-channel device identities without a
+  specific reason to.
+- `ConnectDevice`/`ConnectCommandHandler` are deliberately split: `connect_device.py` stays
+  Discord-free (mirrors `session_manager.py`/`content_pipeline.py`'s separation), and all
+  Discord-specific state (which guild, which voice client, bridging librespot's worker thread to
+  the asyncio loop) lives in `commands.py`'s `ConnectCommandHandler`. Keep new Connect-driven
+  actions on that side of the boundary.

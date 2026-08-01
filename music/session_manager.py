@@ -3,6 +3,9 @@ from datetime import datetime, timezone
 
 from librespot.core import Session
 from librespot.proto import Authentication_pb2 as Authentication
+from librespot.proto import Connect_pb2 as Connect
+
+DEFAULT_DEVICE_NAME = "Discord Bot"
 
 logger = logging.getLogger("music.session_manager")
 
@@ -33,13 +36,24 @@ def _login_credentials_from_json(credentials_json):
     )
 
 
-def build_session(credentials_json):
+def build_session(credentials_json, device_name=DEFAULT_DEVICE_NAME):
     """Build a librespot Session from a credentials blob shaped like OAuth.save_creds() output.
 
-    Blocking -- opens a real connection to a Spotify access point. Must be run
-    off the asyncio loop, e.g. via loop.run_in_executor(...).
+    Blocking -- opens a real connection to a Spotify access point (this also
+    opens the session's dealer websocket -- Session.authenticate() calls
+    self.dealer().connect() internally regardless of whether anything ever
+    registers a Connect-state listener on it). Must be run off the asyncio
+    loop, e.g. via loop.run_in_executor(...).
+
+    device_name/device_type are what shows up for this device in the user's
+    Spotify app once something (music/connect_device.py) registers Connect
+    state for this session -- SPEAKER is a more accurate default than
+    librespot's own "COMPUTER"/"librespot-python" for how this bot actually
+    plays audio.
     """
     builder = Session.Builder()
+    builder.set_device_name(device_name)
+    builder.set_device_type(Connect.DeviceType.SPEAKER)
     builder.login_credentials = _login_credentials_from_json(credentials_json)
     return builder.create()
 
