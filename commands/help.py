@@ -40,10 +40,10 @@ async def helpHandler(message:discord.Message):
             """)
         elif (instructions[1] == "spotify"):
             await message.channel.send("""
-            ```,play <spotify track link or URI>``` join your voice channel and play a Spotify track. Requires **Spotify Premium**.
-            If you haven't linked your Spotify account yet, this sends you a login link -- authorize it, then DM me the `code=` from the address bar and I'll link you and start playing.
+            ```,play``` join your voice channel and register the bot as a Spotify Connect device. Requires **Spotify Premium**.
+            If you haven't linked your Spotify account yet, this sends you a login link -- authorize it, then DM me the `code=` from the address bar and I'll link you and join your voice channel.
+            Once set up, open Spotify and select **Discord Bot** as your playback device -- control everything (play/pause/resume) from the Spotify app itself.
             ```,spotify unlink``` remove your linked Spotify account from the bot
-            Note: right now this only plays direct track links/URIs (e.g. an open.spotify.com/track/... link) -- searching by song name is coming soon.
             """)
     else:
         await message.channel.send("""
@@ -63,7 +63,7 @@ async def helpHandler(message:discord.Message):
         ,gym\n
         Pinging voice channels: These commands help you ping all the members of a specific voice channel, please note this is a discord command
         /ping\n
-        SPOTIFY: Play a Spotify track in your voice channel (Premium required). Use ,help spotify for more info
+        SPOTIFY: Register the bot as a Spotify Connect device in your voice channel, then control playback from the Spotify app (Premium required). Use ,help spotify for more info
         ,play\n
         """)
     await message.delete()

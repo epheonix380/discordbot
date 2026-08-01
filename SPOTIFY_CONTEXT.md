@@ -14,20 +14,79 @@
 Branch: `claude/spotify-connect-bot-step-1-in130u`, based directly on `production`
 (`d91273a`, the containerized/watchdog-supervised state — already includes the hosting work).
 
-**Phases 1–5 of `SPOTIFY_CONNECT_PLAN.md` §13 are done:** data model & store, the audio pipeline
+**Phases 1–5 of `SPOTIFY_CONNECT_PLAN.md` §13 were built:** data model & store, the audio pipeline
 (creds → `Session` → `content_feeder` → ffmpeg → PCM), Discord voice (join/leave, `vc.play`),
-OAuth link UX (Mode B — command-driven URI player — the plan's own "shippable" milestone), and
-now the Connect receiver (Mode A): the bot registers as a real Spotify Connect device, and
-transfer/play/pause/resume from the user's own Spotify app are wired to actually control the
-Discord voice playback. Phase 0 (de-risk experiments against a live Spotify Premium account) was
-explicitly **skipped** across all five sessions — it needs interactive/live credentials and a
-real running bot this sandbox doesn't have — and is still open; see "Still open" below. **The
-user has said they'll do a manual final pass covering everything that needs a real Spotify
-Premium account and a live bot** (Phases 0/2/3/4/5's live acceptance criteria) — what *was*
+OAuth link UX, and the Connect receiver (Mode A): the bot registers as a real Spotify Connect
+device, and transfer/play/pause/resume from the user's own Spotify app are wired to actually
+control the Discord voice playback. **Mode B (command-driven URI play, `,play <track>`,
+`music/search.py`) has since been explicitly removed at the user's request — see "Scope change"
+right below, read it before touching `,play` or anything URI/search-related.** Phase 0 (de-risk
+experiments against a live Spotify Premium account) was explicitly **skipped** across all
+sessions — it needs interactive/live credentials and a real running bot this sandbox doesn't
+have — and is still open; see "Still open" below. **The user has said they'll do a manual final
+pass covering everything that needs a real Spotify Premium account and a live bot** — what *was*
 verified without one is detailed under each phase below. For Phase 5 specifically, that
 verification is unusually deep given the stakes (see below — it caught and fixed two real bugs,
 one in this bot's own new code and one in the librespot-python library itself) but it is still
 not a substitute for actually watching a device appear in a real Spotify app and controlling it.
+
+## Scope change: Mode B removed, Connect receiver (Mode A) only
+
+**The user explicitly asked for search/Mode-B to be removed: "that is not required... I want you
+to remove search functionality. Just have the receiver flow."** This is a deliberate, permanent
+scope decision, not a temporary skip — don't reintroduce free-text search, direct-URI `,play
+<track>`, or a "pending query" concept without the user asking again.
+
+What changed, on top of everything Phase 1–5 built:
+- **`music/search.py` deleted entirely** (it only ever resolved direct `spotify:track:...`
+  URIs/URLs anyway — no free-text Web-API search was ever implemented, see the old Phase 4 notes
+  below for why).
+- **`,play` no longer takes any argument.** It now just: checks the caller is in a voice channel,
+  links Spotify if needed (same OAuth paste-back flow as before, just without a query attached to
+  the pending link), then joins the caller's voice channel and registers/reuses their
+  `ConnectDevice` (`music/commands.py`'s `_join_and_register_device`, replacing the old
+  `_join_and_play`-based flow for this command). **Nothing plays as a result of `,play` itself.**
+  The reply now reads "Ready! Open Spotify and select **Discord Bot** as your playback device..."
+  instead of "Now playing...".
+- **Playback only ever starts via a Connect "transfer" command** from the user's own Spotify app
+  (`ConnectCommandHandler._do_transfer`, unchanged from Phase 5) — i.e. the *only* remaining way
+  to play a track is: user does `,play` to get the bot into their voice channel and registered as
+  a device, then opens Spotify and picks that device, which sends the track URI to us via the
+  dealer. This is exactly Mode A as specced, with Mode B's command-surface removed rather than
+  just left unused.
+- **`music/oauth_flow.py`**: dropped the `pending_query` field from `start_link()`/the pending-
+  link dict entirely (was always `None` in practice once Mode B's argument went away). Pending
+  entries now only carry `guild_id`/`voice_channel_id`, used purely to auto-join the right voice
+  channel once linking completes via DM paste-back.
+- **`music/commands.py`**: removed `note_manual_play` (existed only to seed
+  `ConnectCommandHandler` state for a manually-chosen track, which no longer happens) and the old
+  `_join_and_play`-based success path in `handle_play`/`handle_spotify_pasteback`. Added
+  `_join_and_register_device`, shared by both. `_join_and_play` itself **stays** — it's still
+  exactly what `_do_transfer` needs (join + immediately play a *known* track URI once Spotify
+  tells us one via transfer), just no longer called from the manual `,play` path.
+- **Nothing about `music/connect_device.py` or `ConnectCommandHandler`'s Connect-protocol
+  internals changed** — the crosstalk-bug fix, transfer/pause/resume dispatch, thread↔asyncio
+  bridge, and periodic state reporting are all exactly as Phase 5 left them and were re-verified
+  (unit tests, including the real-`DealerClient` crosstalk check and the real-background-thread
+  bridge test) after this change to confirm nothing regressed.
+- **`music/playback.py` and `music/content_pipeline.py` are unaffected** — still needed (the
+  Connect receiver's `_do_transfer` path uses `playback.play_track`, which uses the same
+  ffmpeg-piping approach either way). `music/phase2_smoke_test.py`/`phase3_smoke_test.py` didn't
+  reference search and needed no changes.
+- **`commands/help.py`** updated to describe the new flow (no more "play a track" framing).
+- **`SPOTIFY_CONNECT_PLAN.md` itself was not edited** — it's the original planning doc and still
+  describes both Mode A and Mode B (Mode B as the earlier milestone, Mode A as the target); this
+  file (`SPOTIFY_CONTEXT.md`) is where the "actually, just Mode A" decision lives. If a future
+  session reads the plan first without reading this section, they'll get the wrong idea that
+  Mode B should exist — **that's exactly why this section is first**, right after the summary.
+
+Consequence for what's "next": **Phase 6 (Search & queue) as originally scoped is now largely
+moot** — there's no `,play <query>` to search for, and "queue" only makes sense if something
+enqueues tracks, which nothing does anymore (the Spotify app itself manages the user's queue;
+transfer commands just tell us what's currently playing). If a real per-guild `GuildPlayer`
+becomes useful later, it'd be to fix the "stale state after natural track end" gap (still present,
+see Phase 5's "Known limitations" below) or to support skip/seek from the app — not for a
+bot-side queue. Don't resurrect Phase 6 as originally scoped without checking with the user first.
 
 ## What was built (Phase 5)
 
@@ -214,6 +273,13 @@ verification went further than previous phases, specifically to catch the class 
   wants per-channel device identities.
 
 ## What was built (Phase 4)
+
+> **Superseded in part** — see "Scope change" above. This section is left as-is for history; the
+> `pending_query`/track-auto-play/search pieces described below **no longer exist** in the
+> codebase. What's still true: the OAuth paste-back mechanics (`start_link`/`parse_code`/
+> `complete_link`, the keymaster client ID, the redirect URL choice, the credential-format
+> finding). What's gone: `music/search.py`, auto-playing a query after linking, and `,play` taking
+> any argument at all.
 
 Goal per plan §13: "`oauth_flow.py` + pending store; `,play` issues link when unlinked;
 modal/DM paste-back persists creds; auto-plays pending query. Acceptance: a fresh user links in
@@ -526,29 +592,26 @@ committed. The repo's actual runtime is Python 3.9.13 in Docker per the `Dockerf
 
 ## Still open / for the next phase(s)
 
-Per `SPOTIFY_CONNECT_PLAN.md` §13, **Phase 6 — Search & queue** is next: `music/search.py`'s
-free-text search via the Web API (`session.tokens()`), a real `GuildPlayer` queue in
-`music/playback.py`, and the remaining control commands (`,pause`/`,resume`/`,skip`/`,stop`/
-`,leave`/`,queue`/`,nowplaying`). Concretely:
+**Per the user's explicit direction (see "Scope change" above), Phase 6 — Search & queue as
+originally scoped in `SPOTIFY_CONNECT_PLAN.md` §13 is not planned work anymore.** There's no
+`,play <query>` to search for and no bot-side queue concept — the Spotify app itself is the
+queue/search UI now; this bot is purely the receiver. Don't pick Phase 6 back up without checking
+with the user first. What's actually still open:
 
-- **This is also, realistically, when Phase 5's untested assumptions get their first real
-  chance to be validated or corrected** — a `,play <song name>` that actually resolves via search
-  makes manual testing far more natural than requiring a raw track URI, and `on_request`'s
-  unconditional raw-command logging (Phase 5) means the first live dealer session will surface
-  whether the assumed `endpoint`/`data` command shape is right. If the user's manual pass happens
-  before Phase 6 work starts, check the logs from that pass for any `"Unhandled Connect
-  endpoint"` warnings before trusting Phase 5's command dispatch is complete.
-- **`music/playback.py` still has no `GuildPlayer`** — just stateless `join`/`leave`/
-  `play_track`. Phase 6's queue needs real per-guild state (current track, queue, position) that
-  Phase 5's `ConnectCommandHandler` also approximates ad hoc (`current_track_uri`, `is_paused`,
-  a monotonic-clock position estimate) — worth unifying rather than maintaining two parallel
-  notions of "what's currently playing." `ConnectCommandHandler.on_request`'s `skip_next`/
-  `skip_prev`/`seek_to` handling (currently a deliberate "not supported yet" reply) should get
-  wired to whatever `GuildPlayer` ends up exposing.
-- **The natural-end-of-track gap flagged under Phase 5** ("Known limitations" above) — wire
-  `playback.play_track`'s `after` callback to notify `ConnectCommandHandler` (or whatever
-  `GuildPlayer` becomes) so Connect state reporting doesn't keep claiming a finished track is
-  still playing. This is exactly the kind of thing a real queue/state object should own.
+- **The live verification gap is now the main thing left**, and it's more meaningful than before:
+  with `,play` actually registering a Connect device, the user's manual pass can now test the
+  real thing end-to-end (link → device appears in Spotify app → transfer → audio in VC →
+  pause/resume from the app). `music/phase2_smoke_test.py` and `music/phase3_smoke_test.py` are
+  still available for the lower-level pipeline checks. `ConnectDevice.on_request`'s unconditional
+  raw-command logging means that pass will also surface whether the assumed Connect command
+  shape (`endpoint`/`data` for transfer) is right — check the logs for any `"Unhandled Connect
+  endpoint"` warnings.
+- **The natural-end-of-track gap flagged under Phase 5** ("Known limitations" above) is still
+  present: `playback.play_track`'s `after` callback doesn't notify `ConnectCommandHandler`, so if
+  a track finishes without `,spotify unlink` or another Connect command happening, the periodic
+  state-report loop keeps reporting stale "still playing" state. Worth fixing on its own terms now
+  (small, contained — wire `after` to call something like `handler.on_track_ended()`), not as part
+  of a queue system that no longer exists.
 - **Token refresh (plan §5.5) is still unresolved** — see "Consequence for reuse & refresh" under
   Phase 2. A live Connect device plausibly stays registered far longer than a single `,play`
   call, so this is more likely to actually bite now than in earlier phases. Still no auto-refresh;
@@ -558,12 +621,12 @@ free-text search via the Web API (`session.tokens()`), a real `GuildPlayer` queu
   hearing their track; a device appearing in a real Spotify app and responding to app controls) —
   see each phase's "What was actually verified vs. not" above. All the same underlying gap: no
   live Spotify Premium account or running bot available in this sandbox. **The user has said
-  they'll do a manual final pass to cover this.** `music/phase2_smoke_test.py` and
-  `music/phase3_smoke_test.py` are ready for that; Phase 4/5's own logic was verified unusually
+  they'll do a manual final pass to cover this.** Phase 4/5's own logic was verified unusually
   thoroughly with mocks and, for Phase 5, real (unmocked) library objects where it mattered most
   (see above) — including catching and fixing two real bugs (one in librespot-python itself, one
-  in this bot's own thread-safety) that only surfaced *because* of that testing. None of that
-  substitutes for watching a real device show up in a real Spotify app.
+  in this bot's own thread-safety) that only surfaced *because* of that testing, and this was
+  re-verified after the Mode-B removal to confirm nothing regressed. None of that substitutes for
+  watching a real device show up in a real Spotify app.
 
 ## Decisions already made (don't relitigate)
 - Base branch is `production`, not `librespot` (plan §0) — confirmed still true, this branch's
@@ -585,8 +648,9 @@ free-text search via the Web API (`session.tokens()`), a real `GuildPlayer` queu
   no-Discord Phase 2 file-output use case only.
 - No `discord.Embed` usage — this codebase has none anywhere, so Phase 4 sent plain text to match,
   despite the plan suggesting embeds. Keep doing that unless the user asks for embeds specifically.
-- `music/search.py` only handles direct Spotify track URIs/URLs, not free-text search — that's
-  Phase 6 by the plan's own phase table, not an oversight.
+- `music/search.py` was removed entirely and `,play` takes no argument — the user explicitly
+  asked for search/Mode-B to go, see "Scope change" near the top of this file. Don't reintroduce
+  it without the user asking again.
 - Session/credential caching (`session_manager._sessions`) is a plain in-process dict, not
   persisted — acceptable for now since `SpotifyLink.credentials` in the DB is the durable copy
   and a session gets rebuilt from it on demand; revisit only if Phase 5's dealer connections need

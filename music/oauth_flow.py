@@ -18,7 +18,7 @@ DEFAULT_REDIRECT_URL = "http://127.0.0.1:5588/login"
 PENDING_TTL_SECONDS = 600
 
 _lock = threading.Lock()
-_pending = {}  # str(user_id) -> {"oauth", "pending_query", "guild_id", "voice_channel_id", "created_at"}
+_pending = {}  # str(user_id) -> {"oauth", "guild_id", "voice_channel_id", "created_at"}
 
 
 def _purge_expired_locked():
@@ -28,7 +28,7 @@ def _purge_expired_locked():
         del _pending[uid]
 
 
-def start_link(user_id, pending_query=None, guild_id=None, voice_channel_id=None):
+def start_link(user_id, guild_id=None, voice_channel_id=None):
     """Begin a paste-back OAuth flow for a Discord user. Returns the auth URL to send them.
 
     Not blocking on the network -- get_auth_url() only does local PKCE math.
@@ -39,7 +39,6 @@ def start_link(user_id, pending_query=None, guild_id=None, voice_channel_id=None
         _purge_expired_locked()
         _pending[str(user_id)] = {
             "oauth": oauth,
-            "pending_query": pending_query,
             "guild_id": guild_id,
             "voice_channel_id": voice_channel_id,
             "created_at": time.time(),
@@ -69,9 +68,9 @@ def complete_link(user_id, raw_code_or_url):
     """Exchange a pasted code for librespot credentials. Blocking (network call).
 
     Returns (credentials_json: dict, pending: dict) with pending containing
-    whatever start_link() was given (pending_query/guild_id/voice_channel_id).
-    Raises KeyError if there's no pending link for this user (expired or
-    never started).
+    whatever start_link() was given (guild_id/voice_channel_id). Raises
+    KeyError if there's no pending link for this user (expired or never
+    started).
     """
     with _lock:
         _purge_expired_locked()

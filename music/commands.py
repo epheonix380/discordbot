@@ -7,16 +7,12 @@ import discord
 from librespot.proto import Connect_pb2 as Connect
 
 from helpers import spotifyStore
-from music import oauth_flow, playback, search, session_manager
+from music import oauth_flow, playback, session_manager
 from music.connect_device import ConnectDevice
 
 logger = logging.getLogger("music.commands")
 
 PREMIUM_NOTICE = "**Spotify Premium is required** to stream through the bot."
-UNSUPPORTED_QUERY_NOTICE = (
-    "I can only play direct Spotify track links right now, e.g. `spotify:track:...` "
-    "or an `open.spotify.com/track/...` URL -- searching by name is coming soon."
-)
 
 STATE_REPORT_INTERVAL_SECONDS = 5
 
@@ -86,15 +82,6 @@ class ConnectCommandHandler:
         self._position_at_start_ms = position_ms
         self._started_at_monotonic = None if is_paused else time.monotonic()
         self.is_paused = is_paused
-
-    async def note_manual_play(self, guild_id, track_uri):
-        """Called from the normal (non-Connect) ,play path, so a Spotify-app
-        pause/resume sent right after a manual ,play still has somewhere to
-        act, and so the app's UI picks up what's actually playing."""
-        self.guild_id = guild_id
-        self._mark_playing(track_uri, 0, False)
-        await self._report_state_async(Connect.PutStateReason.PLAYER_STATE_CHANGED)
-        self._ensure_report_task()
 
     def on_transfer(self, track_uri, position_ms, is_paused):
         self._run_coroutine(self._do_transfer(track_uri, position_ms, is_paused))
@@ -210,12 +197,21 @@ def _close_connect_device(member_id):
             logger.exception("error closing Connect device for member %s", member_id)
 
 
-async def handle_play(message: discord.Message, client: discord.Client):
-    query = message.content[len(",play"):].strip()
-    if not query:
-        await message.channel.send("Usage: `,play <spotify:track:... URI or open.spotify.com/track/... link>`")
-        return
+async def _join_and_register_device(client: discord.Client, loop, member_id, guild: discord.Guild, voice_channel, session):
+    """Join the caller's voice channel and (re)register their Connect device
+    there. Nothing plays yet -- playback only starts once the Spotify app
+    sends a transfer command for this device."""
+    voice_client = discord.utils.get(client.voice_clients, guild=guild)
+    if voice_client is None or not voice_client.is_connected():
+        voice_client = await playback.join(voice_channel)
+    elif voice_client.channel.id != voice_channel.id:
+        await voice_client.move_to(voice_channel)
+    _ensure_connect_device(client, loop, member_id, session)
+    _connect_handlers[str(member_id)].guild_id = guild.id
+    return voice_client
 
+
+async def handle_play(message: discord.Message, client: discord.Client):
     voice_state = message.author.voice
     if voice_state is None or voice_state.channel is None:
         await message.channel.send("Join a voice channel first, then try `,play` again.")
@@ -227,19 +223,14 @@ async def handle_play(message: discord.Message, client: discord.Client):
 
     if link is None:
         auth_url = await loop.run_in_executor(
-            None, oauth_flow.start_link, message.author.id, query, message.guild.id, voice_channel.id)
+            None, oauth_flow.start_link, message.author.id, message.guild.id, voice_channel.id)
         await message.channel.send(
             "You haven't linked Spotify yet. " + PREMIUM_NOTICE + "\n"
             "1. Open this link and log in/authorize: " + auth_url + "\n"
             "2. The page will likely fail to load after you authorize -- that's expected. "
             "Copy the `code=...` value (or the whole URL) from your browser's address bar.\n"
-            "3. DM it to me here and I'll link your account and start playing."
+            "3. DM it to me here and I'll link your account and join your voice channel."
         )
-        return
-
-    track_uri = search.resolve_track_uri(query)
-    if track_uri is None:
-        await message.channel.send(UNSUPPORTED_QUERY_NOTICE)
         return
 
     try:
@@ -254,21 +245,16 @@ async def handle_play(message: discord.Message, client: discord.Client):
         return
 
     try:
-        await _join_and_play(client, message.guild, voice_channel, session, track_uri)
+        await _join_and_register_device(client, loop, message.author.id, message.guild, voice_channel, session)
     except Exception:
-        logger.exception("failed to play %s for member %s", track_uri, message.author.id)
-        await message.channel.send("Couldn't play that track (it may be unavailable or region-locked).")
+        logger.exception("failed to join/register Connect device for member %s", message.author.id)
+        await message.channel.send("Couldn't join your voice channel and register as a Spotify Connect device. Try `,play` again.")
         return
 
-    try:
-        _ensure_connect_device(client, loop, message.author.id, session)
-        await _connect_handlers[str(message.author.id)].note_manual_play(message.guild.id, track_uri)
-    except Exception:
-        # Connect-device registration is a bonus (lets the Spotify app see/control
-        # the device); audio is already playing, so don't fail the command over it.
-        logger.exception("failed to register Connect device for member %s", message.author.id)
-
-    await message.channel.send(f"Now playing {track_uri} in {voice_channel.name}.")
+    await message.channel.send(
+        f"Ready! Open Spotify and select **{session_manager.DEFAULT_DEVICE_NAME}** as your playback device "
+        f"to start listening in {voice_channel.name}."
+    )
 
 
 async def handle_spotify(message: discord.Message, client: discord.Client):
@@ -292,7 +278,7 @@ async def handle_spotify_pasteback(message: discord.Message, client: discord.Cli
             None, oauth_flow.complete_link, message.author.id, message.content)
     except KeyError:
         await message.channel.send(
-            "I don't have a pending Spotify link for you -- start with `,play <track>` in a server first."
+            "I don't have a pending Spotify link for you -- start with `,play` in a server first."
         )
         return
     except Exception:
@@ -317,10 +303,8 @@ async def handle_spotify_pasteback(message: discord.Message, client: discord.Cli
     )
     session_manager.cache_session(message.author.id, session)
 
-    query = pending.get("pending_query")
     guild_id = pending.get("guild_id")
     voice_channel_id = pending.get("voice_channel_id")
-    track_uri = search.resolve_track_uri(query) if query else None
 
     guild = client.get_guild(guild_id) if guild_id else None
     voice_channel = guild.get_channel(voice_channel_id) if guild and voice_channel_id else None
@@ -333,29 +317,25 @@ async def handle_spotify_pasteback(message: discord.Message, client: discord.Cli
         and member.voice.channel.id == voice_channel.id
     )
 
-    if track_uri is None or not still_in_channel:
+    if not still_in_channel:
         await message.channel.send(
             f"Linked to Spotify as **{spotify_username or 'your account'}**! "
-            f"Go back to the server and use `,play {query or '<track>'}` again to hear it."
+            "Go back to a voice channel and use `,play` to get set up."
         )
         return
 
     try:
-        await _join_and_play(client, guild, voice_channel, session, track_uri)
+        await _join_and_register_device(client, loop, message.author.id, guild, voice_channel, session)
     except Exception:
-        logger.exception("failed to auto-play %s for member %s after linking", track_uri, message.author.id)
+        logger.exception("failed to join/register Connect device for member %s after linking", message.author.id)
         await message.channel.send(
-            f"Linked as **{spotify_username or 'your account'}**, but couldn't start playback automatically. "
-            f"Use `,play {query}` again in the server."
+            f"Linked as **{spotify_username or 'your account'}**, but couldn't finish setting up. "
+            "Use `,play` again in the server."
         )
         return
-
-    try:
-        _ensure_connect_device(client, loop, message.author.id, session)
-        await _connect_handlers[str(message.author.id)].note_manual_play(guild.id, track_uri)
-    except Exception:
-        logger.exception("failed to register Connect device for member %s", message.author.id)
 
     await message.channel.send(
-        f"Linked to Spotify as **{spotify_username or 'your account'}** and now playing in {voice_channel.name}!"
+        f"Linked to Spotify as **{spotify_username or 'your account'}**! "
+        f"Open Spotify and select **{session_manager.DEFAULT_DEVICE_NAME}** as your playback device "
+        f"to start listening in {voice_channel.name}."
     )
