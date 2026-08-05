@@ -1,0 +1,11 @@
+[Unit]
+Description=Discord bot external health monitor (alerts to Discord if the bot is down)
+Documentation=file:///root/discordbot/CLAUDE.md
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+# TOKEN + ALERT_CHANNEL_ID (and the rest of the bot env) come from here.
+EnvironmentFile=/root/discordbot/.env
+ExecStart=/usr/local/bin/discordbot_monitor.py

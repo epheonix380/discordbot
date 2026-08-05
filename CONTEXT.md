@@ -1,6 +1,39 @@
 # CONTEXT.md — session state for resuming this task
 
-**Purpose:** onboard a fresh agent fast. Read `PLAN.md` first, then this, then the highest-numbered `STEP_N.md`.
+**Purpose:** onboard a fresh agent fast. **For day-to-day operation and failure
+modes, read `CLAUDE.md` first** — it is the durable operating guide. This file is
+the migration/deployment history plus a log of incidents. The
+`PLAN.md` / `STEP_N.md` files are the original 2026-07-18 deployment work.
+
+---
+
+## INCIDENT 2026-07-25 — bot "down" 2 days while reporting healthy (RESOLVED)
+
+**What happened:** host Postgres restarted (~2026-07-23). The bot holds a
+long-running Django DB connection with no HTTP request cycle, so Django never
+reaped the dead connection: every query threw `connection already closed` for
+~2 days (1356 occurrences). The Discord gateway stayed up, so the heartbeat
+healthcheck stayed green and the watchdog never fired. Bot up, DB dead.
+
+**Fixed (all committed to `production` working tree):**
+- `helpers/db.py` — resilient `sync_to_async` that runs `close_old_connections()`
+  around every DB helper; all 9 DB helper modules now import from it.
+- `backend/settings.py` — `conn_max_age=0, conn_health_checks=True`.
+  → DB now self-heals on the next query after a Postgres restart; no bot restart.
+  Verified with `pg_terminate_backend` on the bot's own backend.
+- `helpers/observability.py` + `main.py` — **logging** (was none): rotating
+  `logs/bot.log`, ~30 min retained, host-mounted at `/root/discordbot/logs/`,
+  captures print()/tracebacks/discord/apscheduler.
+- Same module — **cleanup job** (every 5 min): deletes generated images and
+  rotated logs older than 30 min (9 stale images had accumulated).
+- `docker-compose.yml` — added `./logs:/app/logs` bind mount. `.gitignore` — `logs/`.
+
+**Full details:** see `CLAUDE.md` §3–5. Rebuilt image + recreated container;
+verified healthy, 0 DB errors, cleanup + logging live.
+
+**Not done / open:** none required. Optional follow-up — the many `print()` calls
+across the codebase now flow to logs via stdout capture; converting them to real
+`logging` calls with levels is a nice-to-have, not needed.
 
 ---
 

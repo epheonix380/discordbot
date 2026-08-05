@@ -1,5 +1,5 @@
 from storage.models import GuessTheHero
-from asgiref.sync import sync_to_async
+from helpers.db import sync_to_async  # resilient wrapper: reconnects after a Postgres restart
 
 @sync_to_async
 def setHeroImage(guild_id,image_url,id, user_id):

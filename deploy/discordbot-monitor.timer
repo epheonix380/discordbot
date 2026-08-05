@@ -1,0 +1,12 @@
+[Unit]
+Description=Run the discord bot health monitor every 2 minutes
+
+[Timer]
+# Start after boot has settled; matches the watchdog cadence.
+OnBootSec=6min
+OnUnitActiveSec=2min
+AccuracySec=15s
+Unit=discordbot-monitor.service
+
+[Install]
+WantedBy=timers.target
