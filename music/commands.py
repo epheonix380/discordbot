@@ -202,11 +202,29 @@ async def join_and_register_device(client: discord.Client, loop, member_id, guil
     there. Nothing plays yet -- playback only starts once the Spotify app
     sends a transfer command for this device."""
     voice_client = discord.utils.get(client.voice_clients, guild=guild)
-    if voice_client is None or not voice_client.is_connected():
+    if voice_client is not None and not voice_client.is_connected():
+        # A half-dead voice client is still registered against this guild in
+        # discord.py's own state, so calling connect() would raise
+        # "Already connected to a voice channel." rather than reconnecting.
+        # Tear it down first so the fresh connect below can succeed.
+        logger.info("discarding stale voice client for guild %s before rejoining", guild.id)
+        try:
+            await playback.leave(voice_client)
+        except Exception:
+            logger.warning("failed to cleanly drop stale voice client for guild %s",
+                           guild.id, exc_info=True)
+        voice_client = None
+
+    if voice_client is None:
         voice_client = await playback.join(voice_channel)
     elif voice_client.channel.id != voice_channel.id:
         await voice_client.move_to(voice_channel)
-    _ensure_connect_device(client, loop, member_id, session)
+
+    # ConnectDevice registration talks to Spotify's dealer (websocket
+    # registration + an initial put_state), which is blocking network I/O.
+    # Running it inline stalled the event loop long enough for discord.py to
+    # log "Shard ID None has stopped responding to the gateway".
+    await loop.run_in_executor(None, _ensure_connect_device, client, loop, member_id, session)
     _connect_handlers[str(member_id)].guild_id = guild.id
     return voice_client
 

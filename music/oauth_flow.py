@@ -34,7 +34,7 @@ CLIENT_ID = os.environ.get("SPOTIFY_CLIENT_ID", "").strip() or KEYMASTER_CLIENT_
 # registered on whichever client CLIENT_ID points at -- Spotify compares it
 # byte-for-byte, including scheme, any port, and trailing slash.
 REDIRECT_URL = os.environ.get(
-    "SPOTIFY_REDIRECT_URL", "https://67-217-243-44.nip.io/").strip()
+    "SPOTIFY_REDIRECT_URL", "https://67.217.243.44.nip.io/").strip()
 
 PENDING_TTL_SECONDS = 600
 
