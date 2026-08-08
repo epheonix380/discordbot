@@ -1,5 +1,5 @@
 from storage.models import Member, SpotifyLink
-from asgiref.sync import sync_to_async
+from helpers.db import sync_to_async  # resilient wrapper: reconnects after a Postgres restart
 
 @sync_to_async
 def getLink(uid):
