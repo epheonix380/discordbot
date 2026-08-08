@@ -1,6 +1,6 @@
 from storage.models import ListOfChoices, Item, Member
 from storage.serializers import ItemSerializer
-from asgiref.sync import sync_to_async
+from helpers.db import sync_to_async  # resilient wrapper: reconnects after a Postgres restart
 
 @sync_to_async
 def getRecentChoice(uid, name=None):

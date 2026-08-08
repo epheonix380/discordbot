@@ -23,6 +23,10 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.all()
 if __name__ == '__main__':
+    # Set up logging FIRST so everything below (django.setup(), the ML imports,
+    # every print() and traceback) is captured to the rotating 30-minute log.
+    from helpers.observability import setup_logging
+    setup_logging()
     import django
     django.setup()
 client = discord.Client(intents=intents)
@@ -185,8 +189,18 @@ async def heartbeat():
         await asyncio.sleep(30)
 
 
+async def cleanup_job():
+    # Reap generated images and stale log files older than 30 minutes so the
+    # container's writable layer does not grow without bound. Runs in a worker
+    # thread because it does blocking disk IO.
+    from helpers.observability import cleanup_old_files
+    await asyncio.to_thread(cleanup_old_files)
+
+
 scheduler = AsyncIOScheduler()
 scheduler.add_job(tick, 'interval', minutes=5)
+# Run cleanup shortly after boot and every 5 minutes thereafter.
+scheduler.add_job(cleanup_job, 'interval', minutes=5, next_run_time=datetime.now(timezone.utc) + timedelta(seconds=30))
 scheduler.start()
 loop = asyncio.get_event_loop()
 loop.create_task(client.start(TOKEN))

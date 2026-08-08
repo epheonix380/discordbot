@@ -21,3 +21,6 @@ db-data/
 *.sql
 *.dump
 .claude/
+
+# rolling application logs (auto-rotated, host-mounted) - runtime only
+logs/

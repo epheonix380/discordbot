@@ -1,6 +1,6 @@
 from storage.models import GameVersion, GameVersionSubscriptions, Channel, Guild
 from storage.serializers import GameSerializer, GameSubscriptionSerializer
-from asgiref.sync import sync_to_async
+from helpers.db import sync_to_async  # resilient wrapper: reconnects after a Postgres restart
 
 @sync_to_async
 def getOrCreate(appid, channelid, guildid):

@@ -1,5 +1,5 @@
 from storage.models import TimeZone, Member, MemberTimeZoneMap
-from asgiref.sync import sync_to_async
+from helpers.db import sync_to_async  # resilient wrapper: reconnects after a Postgres restart
 from storage.serializers import TimeMapSerializer
 
 @sync_to_async

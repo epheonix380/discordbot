@@ -1,6 +1,6 @@
 from storage.models import Guild, GuildActivity, MemberGuildActivity, Member, WeightedGuildActivity
 from storage.serializers import GuildActivitySerializer, MemberGuildActivitySerializer, WeightedGuildActivitySerializer
-from asgiref.sync import sync_to_async
+from helpers.db import sync_to_async  # resilient wrapper: reconnects after a Postgres restart
 import datetime
 from django.db import transaction
 import xlsxwriter

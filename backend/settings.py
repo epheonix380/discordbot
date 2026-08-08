@@ -95,7 +95,16 @@ DATABASES = {
 }
 if (DEBUG==False):
     print("ACTIVATION")
-    db_from_env = dj_database_url.config(conn_max_age=600)
+    # conn_max_age=0: do NOT keep persistent connections. The bot is a
+    # long-running process with no HTTP request cycle, so Django never gets a
+    # chance to reap a connection that died (e.g. when the host Postgres
+    # restarts). A persistent connection that dies stays cached and every
+    # subsequent query raises "connection already closed" until the process is
+    # restarted -- this took the bot down for ~2 days on 2026-07-23.
+    # With 0, each unit of DB work (see helpers/db.py) reconnects, so a Postgres
+    # restart self-heals on the next query. conn_health_checks pings a reused
+    # connection before use as a second line of defence.
+    db_from_env = dj_database_url.config(conn_max_age=0, conn_health_checks=True)
     DATABASES['default'].update(db_from_env)
 
 # Password validation

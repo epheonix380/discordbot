@@ -22,6 +22,13 @@ services:
     network_mode: host
     stop_grace_period: 30s
 
+    # Persist the rolling application log on the host so it survives container
+    # recreation and can be inspected without `docker exec`. The bot rotates it
+    # every 10 min and keeps only ~30 min (see helpers/observability.py), so
+    # this directory stays small on its own.
+    volumes:
+      - ./logs:/app/logs
+
     # Bounded logs; the default json-file driver grows without limit.
     logging:
       driver: json-file

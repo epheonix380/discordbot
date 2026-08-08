@@ -7,7 +7,7 @@ from helpers.timeStrore import getDefaultTimezone, getFormat
 from helpers.timeUtils import getTimeFromString
 import pytz
 import time
-from asgiref.sync import sync_to_async
+from helpers.db import sync_to_async  # resilient wrapper: reconnects after a Postgres restart
 
 @sync_to_async
 def handleGymOptInHelper(message:discord.Message):

@@ -3,7 +3,7 @@ import datetime
 import re
 import pytz
 import time as TIME
-from asgiref.sync import sync_to_async
+from helpers.db import sync_to_async  # resilient wrapper: reconnects after a Postgres restart
 from storage.models import Member, MemberReminder
 from storage.serializers import MemberReminderSerializer
 from helpers.timeStrore import getDefaultTimezone, getFormat
