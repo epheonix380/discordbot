@@ -197,7 +197,7 @@ def _close_connect_device(member_id):
             logger.exception("error closing Connect device for member %s", member_id)
 
 
-async def _join_and_register_device(client: discord.Client, loop, member_id, guild: discord.Guild, voice_channel, session):
+async def join_and_register_device(client: discord.Client, loop, member_id, guild: discord.Guild, voice_channel, session):
     """Join the caller's voice channel and (re)register their Connect device
     there. Nothing plays yet -- playback only starts once the Spotify app
     sends a transfer command for this device."""
@@ -226,10 +226,8 @@ async def handle_play(message: discord.Message, client: discord.Client):
             None, oauth_flow.start_link, message.author.id, message.guild.id, voice_channel.id)
         await message.channel.send(
             "You haven't linked Spotify yet. " + PREMIUM_NOTICE + "\n"
-            "1. Open this link and log in/authorize: " + auth_url + "\n"
-            "2. The page will likely fail to load after you authorize -- that's expected. "
-            "Copy the `code=...` value (or the whole URL) from your browser's address bar.\n"
-            "3. DM it to me here and I'll link your account and join your voice channel."
+            "Authorize here and you're done -- I'll pick it up automatically and "
+            "join your voice channel:\n" + auth_url
         )
         return
 
@@ -245,7 +243,7 @@ async def handle_play(message: discord.Message, client: discord.Client):
         return
 
     try:
-        await _join_and_register_device(client, loop, message.author.id, message.guild, voice_channel, session)
+        await join_and_register_device(client, loop, message.author.id, message.guild, voice_channel, session)
     except Exception:
         logger.exception("failed to join/register Connect device for member %s", message.author.id)
         await message.channel.send("Couldn't join your voice channel and register as a Spotify Connect device. Try `,play` again.")
@@ -270,72 +268,3 @@ async def handle_spotify(message: discord.Message, client: discord.Client):
         return
     await message.channel.send("Usage: `,spotify unlink`")
 
-
-async def handle_spotify_pasteback(message: discord.Message, client: discord.Client):
-    loop = asyncio.get_event_loop()
-    try:
-        credentials_json, pending = await loop.run_in_executor(
-            None, oauth_flow.complete_link, message.author.id, message.content)
-    except KeyError:
-        await message.channel.send(
-            "I don't have a pending Spotify link for you -- start with `,play` in a server first."
-        )
-        return
-    except Exception:
-        logger.exception("failed to complete Spotify link for member %s", message.author.id)
-        await message.channel.send(
-            "That didn't work -- the code may be invalid or expired. Try `,play` again in the server to get a fresh link."
-        )
-        return
-
-    try:
-        session = await loop.run_in_executor(None, session_manager.build_session, credentials_json)
-    except Exception:
-        logger.exception("failed to build librespot session right after linking for member %s", message.author.id)
-        await message.channel.send("Linked, but couldn't start a Spotify session yet. Try `,play` again in a moment.")
-        return
-
-    spotify_username = session.username() or ""
-    await spotifyStore.setLink(
-        message.author.id,
-        credentials=json.dumps(credentials_json),
-        spotify_username=spotify_username,
-    )
-    session_manager.cache_session(message.author.id, session)
-
-    guild_id = pending.get("guild_id")
-    voice_channel_id = pending.get("voice_channel_id")
-
-    guild = client.get_guild(guild_id) if guild_id else None
-    voice_channel = guild.get_channel(voice_channel_id) if guild and voice_channel_id else None
-    member = guild.get_member(message.author.id) if guild else None
-    still_in_channel = (
-        member is not None
-        and member.voice is not None
-        and member.voice.channel is not None
-        and voice_channel is not None
-        and member.voice.channel.id == voice_channel.id
-    )
-
-    if not still_in_channel:
-        await message.channel.send(
-            f"Linked to Spotify as **{spotify_username or 'your account'}**! "
-            "Go back to a voice channel and use `,play` to get set up."
-        )
-        return
-
-    try:
-        await _join_and_register_device(client, loop, message.author.id, guild, voice_channel, session)
-    except Exception:
-        logger.exception("failed to join/register Connect device for member %s after linking", message.author.id)
-        await message.channel.send(
-            f"Linked as **{spotify_username or 'your account'}**, but couldn't finish setting up. "
-            "Use `,play` again in the server."
-        )
-        return
-
-    await message.channel.send(
-        f"Linked to Spotify as **{spotify_username or 'your account'}**! "
-        f"Open Spotify and select **{session_manager.DEFAULT_DEVICE_NAME}** as your playback device "
-        f"to start listening in {voice_channel.name}."
-    )
