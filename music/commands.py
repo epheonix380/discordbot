@@ -133,7 +133,7 @@ class ConnectCommandHandler:
         if self.connect_device is None or self.current_track_uri is None:
             return
         await self.loop.run_in_executor(
-            None,
+            session_manager.SPOTIFY_EXECUTOR,
             self.connect_device.put_state,
             reason,
             not self.is_paused,
@@ -201,6 +201,7 @@ async def join_and_register_device(client: discord.Client, loop, member_id, guil
     """Join the caller's voice channel and (re)register their Connect device
     there. Nothing plays yet -- playback only starts once the Spotify app
     sends a transfer command for this device."""
+    t0 = time.monotonic()
     voice_client = discord.utils.get(client.voice_clients, guild=guild)
     if voice_client is not None and not voice_client.is_connected():
         # A half-dead voice client is still registered against this guild in
@@ -219,12 +220,18 @@ async def join_and_register_device(client: discord.Client, loop, member_id, guil
         voice_client = await playback.join(voice_channel)
     elif voice_client.channel.id != voice_channel.id:
         await voice_client.move_to(voice_channel)
+    t1 = time.monotonic()
+    logger.info("join_and_register_device: voice join took %.2fs", t1 - t0)
 
     # ConnectDevice registration talks to Spotify's dealer (websocket
     # registration + an initial put_state), which is blocking network I/O.
     # Running it inline stalled the event loop long enough for discord.py to
-    # log "Shard ID None has stopped responding to the gateway".
-    await loop.run_in_executor(None, _ensure_connect_device, client, loop, member_id, session)
+    # log "Shard ID None has stopped responding to the gateway". Runs on the
+    # dedicated Spotify executor, not the shared default one -- see
+    # session_manager.SPOTIFY_EXECUTOR.
+    await loop.run_in_executor(session_manager.SPOTIFY_EXECUTOR, _ensure_connect_device, client, loop, member_id, session)
+    t2 = time.monotonic()
+    logger.info("join_and_register_device: _ensure_connect_device (executor) took %.2fs", t2 - t1)
     _connect_handlers[str(member_id)].guild_id = guild.id
     return voice_client
 
@@ -236,12 +243,36 @@ async def handle_play(message: discord.Message, client: discord.Client):
         return
     voice_channel = voice_state.channel
 
+    # TEMPORARY debug detour -- isolating the Discord voice/audio-piping
+    # question from Spotify/librespot entirely. No session, no dealer, no
+    # ConnectDevice -- just discord.py voice connect + FFmpegPCMAudio from a
+    # local file. Revert once voice is confirmed working. See conversation
+    # with the user, 2026-08-09.
+    playback.ensure_opus_loaded()
+    voice_client = discord.utils.get(client.voice_clients, guild=message.guild)
+    await message.channel.send(f"Debug:1")
+    if voice_client is not None and not voice_client.is_connected():
+        try:
+            await playback.leave(voice_client)
+        except Exception:
+            logger.warning("failed to drop stale voice client for guild %s", message.guild.id, exc_info=True)
+        voice_client = None
+    if voice_client is None:
+        voice_client = await playback.join(voice_channel)
+        await message.channel.send(f"Debug: joining {voice_channel}")
+    elif voice_client.channel.id != voice_channel.id:
+        await voice_client.move_to(voice_channel)
+    source = discord.FFmpegPCMAudio("test.mp3")
+    voice_client.play(source)
+    await message.channel.send(f"Debug: playing test.mp3 in {voice_channel.name}.")
+    return
+
     link = await spotifyStore.getLink(message.author.id)
     loop = asyncio.get_event_loop()
 
     if link is None:
         auth_url = await loop.run_in_executor(
-            None, oauth_flow.start_link, message.author.id, message.guild.id, voice_channel.id)
+            session_manager.SPOTIFY_EXECUTOR, oauth_flow.start_link, message.author.id, message.guild.id, voice_channel.id)
         await message.channel.send(
             "You haven't linked Spotify yet. " + PREMIUM_NOTICE + "\n"
             "Authorize here and you're done -- I'll pick it up automatically and "
@@ -249,23 +280,28 @@ async def handle_play(message: discord.Message, client: discord.Client):
         )
         return
 
+    t_start = time.monotonic()
     try:
         credentials_json = json.loads(link["credentials"])
         session = await loop.run_in_executor(
-            None, session_manager.get_session, message.author.id, credentials_json)
+            session_manager.SPOTIFY_EXECUTOR, session_manager.get_session, message.author.id, credentials_json)
     except Exception:
         logger.exception("failed to build librespot session for member %s", message.author.id)
         await message.channel.send(
             "Couldn't connect to your Spotify account. Try `,spotify unlink` then `,play` again to relink."
         )
         return
+    logger.info("handle_play: get_session (executor) took %.2fs", time.monotonic() - t_start)
 
+    t_join = time.monotonic()
     try:
         await join_and_register_device(client, loop, message.author.id, message.guild, voice_channel, session)
     except Exception:
         logger.exception("failed to join/register Connect device for member %s", message.author.id)
         await message.channel.send("Couldn't join your voice channel and register as a Spotify Connect device. Try `,play` again.")
         return
+    logger.info("handle_play: join_and_register_device took %.2fs (total %.2fs)",
+               time.monotonic() - t_join, time.monotonic() - t_start)
 
     await message.channel.send(
         f"Ready! Open Spotify and select **{session_manager.DEFAULT_DEVICE_NAME}** as your playback device "

@@ -51,7 +51,7 @@ async def _finish_link(client, entry, credentials_json):
     user_id = entry["user_id"]
 
     session = await loop.run_in_executor(
-        None, session_manager.build_session, credentials_json)
+        session_manager.SPOTIFY_EXECUTOR, session_manager.build_session, credentials_json)
     spotify_username = session.username() or ""
 
     await spotifyStore.setLink(
@@ -134,7 +134,7 @@ def build_app(client):
             # complete_link_by_state consumes the state, so a replayed
             # callback URL cannot redeem a second set of credentials.
             credentials_json, entry = await loop.run_in_executor(
-                None, oauth_flow.complete_link_by_state, state, code)
+                session_manager.SPOTIFY_EXECUTOR, oauth_flow.complete_link_by_state, state, code)
         except KeyError:
             return _page("Link expired",
                          "That link has already been used or has expired. Run "

@@ -1,4 +1,6 @@
 import logging
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 from librespot.core import Session
@@ -10,6 +12,19 @@ DEFAULT_DEVICE_NAME = "Discord Bot"
 logger = logging.getLogger("music.session_manager")
 
 _sessions = {}
+
+# Every librespot/Spotify blocking call (session login, ConnectDevice
+# registration, put_state) runs here instead of asyncio's shared default
+# executor. librespot is synchronous and thread-heavy on its own (a raw TCP
+# "Receiver" thread per session, plus -- since the dealer-connect fix -- a
+# real websocket thread per session too); routing all of it through a
+# dedicated pool keeps it from queueing behind or contending with unrelated
+# executor work elsewhere in the bot (Django DB calls, image processing,
+# etc.) sharing the default pool. Matches the isolation the user already
+# proved out in another branch (librespot driven from its own thread rather
+# than loop.run_in_executor(None, ...)). Not unbounded -- capped so a burst
+# of concurrent ,play calls can't spawn unlimited OS threads.
+SPOTIFY_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="spotify-worker")
 
 
 def _login_credentials_from_json(credentials_json):
@@ -55,7 +70,16 @@ def build_session(credentials_json, device_name=DEFAULT_DEVICE_NAME):
     builder.set_device_name(device_name)
     builder.set_device_type(Connect.DeviceType.SPEAKER)
     builder.login_credentials = _login_credentials_from_json(credentials_json)
-    return builder.create()
+    # Timed deliberately -- diagnosing a live event-loop stall right around
+    # ,play (main gateway heartbeats missed, voice disconnects ~10s in). This
+    # call is blocking librespot login (network + dealer socket + Receiver
+    # thread startup); the caller is responsible for running it off the
+    # event loop, but if this itself takes unexpectedly long that's a real
+    # lead, not a red herring. See SPOTIFY_CONTEXT.md.
+    started = time.monotonic()
+    session = builder.create()
+    logger.info("build_session: Session.Builder().create() took %.2fs", time.monotonic() - started)
+    return session
 
 
 def get_session(member_id, credentials_json):

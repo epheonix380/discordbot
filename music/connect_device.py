@@ -2,10 +2,11 @@ import base64
 import logging
 import os
 import sys
+import threading
 import time
 
 from librespot import Version
-from librespot.core import DealerClient
+from librespot.core import ApResolver, DealerClient
 from librespot.mercury import MercuryRequests
 from librespot.proto import Connect_pb2 as Connect
 from librespot.structure import MessageListener, RequestListener
@@ -37,6 +38,60 @@ DEALER_MESSAGE_URIS = [
     "hm://connect-state/v1/cluster",
 ]
 DEALER_REQUEST_URI_PREFIX = "hm://connect-state/v1/"
+
+
+def _patch_dealer_connect():
+    """Real fix for a librespot-python bug, not a workaround: DealerClient
+    .connect() builds a ConnectionHolder wrapping a bare
+    websocket.WebSocketApp(url) but never assigns its on_open/on_message/
+    on_failure methods as that WebSocketApp's callbacks, and never calls
+    run_forever() (or starts a thread to run it). Confirmed by reading the
+    installed source directly: websocket.WebSocketApp(url) is constructed
+    with no on_open/on_message/on_error kwargs, and `run_forever` does not
+    appear anywhere else in core.py. The dealer socket is therefore
+    structurally incapable of ever connecting -- nothing is listening for
+    Spotify to open the connection, let alone read from it.
+
+    This matters a lot here: the whole Connect receiver is driven entirely by
+    messages arriving over this socket (the pusher connection_id first, which
+    triggers put_state(NEW_DEVICE) -- see ConnectDevice.on_message -- then
+    transfer/play/pause commands). With the socket dead, the device can never
+    appear in the user's Spotify app, full stop, regardless of anything in
+    this bot's own code.
+
+    Replaces DealerClient.connect() with a corrected version that wires the
+    ConnectionHolder's callbacks onto the WebSocketApp and runs its event
+    loop on a dedicated daemon thread. Applied once, process-wide, at import
+    time; idempotent via a marker attribute so importing this module twice
+    doesn't double-patch.
+    """
+    if getattr(DealerClient.connect, "_discordbot_patched", False):
+        return
+
+    def connect(self):
+        connection = DealerClient.ConnectionHolder(
+            self._DealerClient__session,
+            self,
+            "wss://{}/?access_token={}".format(
+                ApResolver.get_random_dealer(),
+                self._DealerClient__session.tokens().get("playlist-read"),
+            ),
+        )
+        ws = connection._ConnectionHolder__ws
+        ws.on_open = connection.on_open
+        ws.on_message = connection.on_message
+        ws.on_error = connection.on_failure
+        ws.on_close = lambda ws, code, msg: connection.on_failure(
+            ws, "closed: {} {}".format(code, msg))
+        self._DealerClient__connection = connection
+        threading.Thread(target=ws.run_forever, daemon=True,
+                         name="librespot-dealer-ws").start()
+
+    connect._discordbot_patched = True
+    DealerClient.connect = connect
+
+
+_patch_dealer_connect()
 
 
 def _isolate_dealer_listener_state(dealer):
