@@ -19,13 +19,29 @@ link the bot polls on. Verified live through login5. Steps 4/5 rebuilt on it.
 | 2 — supervisor | ✅ **DONE 2026-08-15** (`music/librespot_process.py`). 10 spawn/teardown cycles: no orphans, no fd leak (4→4), registry clean, process cap enforced, restart-with-backoff exercised. Live spawn-to-registered-device not yet re-verified through this code — needs a fresh credential |
 | 3 — audio bridge | ✅ **DONE 2026-08-15** (`music/pcm_source.py`). Starved source emits silence not `b''`; byte-exact frames; 50 frames no drift; partial tail never torn; bounded writer provably blocks (the backpressure that paces librespot) |
 | 4 — link UX | ✅ **REBUILT 2026-08-22 on the device authorization grant** (`music/oauth_flow.py` + `music/spotify_auth.py` + `music/credentials.py`). No paste-back, no callback: bot DMs a `spotify.com/pair` link and polls. Token half verified live against keymaster + login5; the Discord half not yet |
-| 5 — wiring + deletion | ✅ **BUILT 2026-08-15** (`music/commands.py`, `music/playback.py`, `main.py`). Old stack deleted, `librespot` dropped from `requirements.txt`, image rebuilt, bot deployed healthy with 0 tracebacks. **End-to-end acceptance still unverified — needs the user** |
-| 6 — regression + cleanup | not started |
+| 5 — wiring + deletion | ✅ **DONE — end-to-end VERIFIED LIVE 2026-08-22.** `,spotify unlink` → `,play` → approve the DM'd pairing link → bot auto-joined voice → device picked in Spotify → audio. See the evidence block below |
+| 6 — regression + cleanup | 🟡 partly done 2026-08-22 — dead config removed, disk reclaimed; regression pass on discord.py 2.7.1 still outstanding |
 
-**What is left before this feature can be called done:** one live pass by the user — `,play` →
-open the DM'd pairing link → approve → pick the device in Spotify → hear audio in the voice
-channel. Everything up to that point is verified; that specific chain has never been run through
-this code.
+**What is left before this feature can be called done:** the Step 6 regression pass (the rest of
+the bot has still not been exercised on discord.py 2.7.1), plus the two open policy questions in
+Part 6 (idle timeout, multi-user cap).
+
+**Acceptance evidence — the full chain, live, 2026-08-22:**
+
+```
+04:31:01 music.commands:      linked Spotify for member 218174413604913152
+04:31:01 music.spotify_auth:  Spotify rotated a refresh token; persisting the new one
+04:31:01 music.credentials:   persisted rotated refresh token for member 218174413604913152
+04:31:01 music.librespot_process: spawned librespot for member … (pid 193 -> ffmpeg pid 195)
+04:31:01 music.commands:      librespot ready for member … in 0.15s
+04:31:02 librespot_core::session]  Authenticated as '31gfmisimhdtf6sqd4627uhmmtq4' !
+04:31:02 librespot_core::spclient] Resolved "guc3-spclient.spotify.com:443" as spclient AP
+04:31:02 librespot_connect::spirc] active device is <> with session <3fyXFrCJFwaakRbtzVmUVm>
+04:31:16 librespot_playback::player] Loading <SUGAR HONEY ICE TEA> … loaded
+```
+
+0 tracebacks, 0 `connection already closed`. Note the refresh-token rotation firing on the very
+first spawn — the hazard `music/credentials.py` is built around, working in production.
 
 **Step 0 evidence (all live, real Premium account, 2026-08-15):**
 
@@ -523,8 +539,26 @@ feature has never once met.
   automod, NSFW checks, the scheduler jobs.
 - Confirm `cleanup_job` isn't deleting librespot's cache dirs (`IMAGE_DIR`/`FILE_MAX_AGE_MIN` — put
   the cache outside `/app`).
-- Clear `/run/discordbot.maintenance` (ask the user; needs root).
 - Update `SPOTIFY_CONTEXT.md` to point at this file, and mark `SPOTIFY_CONNECT_PLAN.md` superseded.
+
+**Done 2026-08-22:**
+
+- `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` / `SPOTIFY_REDIRECT_URL` removed from `.env` — all
+  three were dead once the callback went (no code reference anywhere). Pre-change copy kept at
+  `backups/.env.pre-devflow-20260822` (gitignored, mode 600); delete it once you're satisfied.
+- Docker disk reclaimed: 33 dangling images + build cache older than 24h. **71G → 35G used**
+  (46% → 23%). The librespot cargo stage was deliberately spared by the `until=24h` filter and
+  verified still `CACHED` — a full `docker compose build` takes 30s, not 15 minutes. Never run a
+  bare `docker builder prune`; it evicts that stage.
+
+**Still needs root (the agent has no passwordless sudo) — ask the user:**
+
+- `sudo rm /run/discordbot.maintenance` — set since 2026-08-09, so the watchdog has been standing
+  down for the whole feature's development.
+- Retire the nginx callback vhost: `sudo rm /etc/nginx/sites-enabled/spotify-callback && sudo
+  nginx -t && sudo systemctl reload nginx`. Nothing listens on 127.0.0.1:8888 any more, so it
+  currently proxies to a closed port. The `67-217-243-44.nip.io` Let's Encrypt cert and its
+  certbot renewal exist only for this vhost and can go too.
 
 ---
 
