@@ -60,6 +60,17 @@ def _guard(fn):
     return guarded
 
 
+def sync_db(func):
+    """Same connection guard, for code that is ALREADY on a worker thread.
+
+    `sync_to_async` is for coroutines hopping into the ORM. Some callers are
+    plain synchronous code running off the event loop -- e.g. the token provider
+    that music/librespot_process.py calls from its supervisor thread -- and they
+    need the identical close_old_connections() guard without the async wrapper.
+    """
+    return _guard(func)
+
+
 def sync_to_async(func=None, **kwargs):
     """Resilient stand-in for asgiref.sync.sync_to_async for DB work."""
 

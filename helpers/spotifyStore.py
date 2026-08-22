@@ -1,5 +1,5 @@
 from storage.models import Member, SpotifyLink
-from helpers.db import sync_to_async  # resilient wrapper: reconnects after a Postgres restart
+from helpers.db import sync_to_async, sync_db  # resilient wrappers: reconnect after a Postgres restart
 
 @sync_to_async
 def getLink(uid):
@@ -31,3 +31,33 @@ def deleteLink(uid):
         qs[0].delete()
         return True
     return False
+
+
+# Synchronous variants for callers already off the event loop -- specifically
+# music/credentials.py, which mints an access token from librespot's supervisor
+# thread and must persist the rotated refresh token in the same critical
+# section. Same connection guard as the async helpers above.
+
+@sync_db
+def getLinkSync(uid):
+    qs = SpotifyLink.objects.filter(member__member_id=uid)
+    if (qs.count() > 0):
+        link = qs[0]
+        return {
+            "credentials": link.credentials,
+            "spotify_username": link.spotify_username,
+            "scope": link.scope,
+        }
+    return None
+
+
+@sync_db
+def setCredentialsSync(uid, credentials):
+    """Overwrite just the credentials blob. Returns False if there is no link."""
+    qs = SpotifyLink.objects.filter(member__member_id=uid)
+    if (qs.count() == 0):
+        return False
+    link = qs[0]
+    link.credentials = credentials
+    link.save(update_fields=["credentials", "updated_at"])
+    return True

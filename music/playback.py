@@ -1,10 +1,11 @@
-import asyncio
+"""Voice-channel plumbing. Deliberately knows nothing about Spotify.
+
+Audio no longer originates here: librespot decodes it and music/pcm_source.py
+feeds it to discord.py. What's left is joining, moving and leaving voice.
+"""
 import logging
 
 import discord
-
-from librespot.audio.decoders import AudioQuality, VorbisOnlyAudioQuality
-from librespot.metadata import TrackId
 
 logger = logging.getLogger("music.playback")
 
@@ -13,18 +14,34 @@ def ensure_opus_loaded():
     # discord.py's find_library('opus') doesn't always resolve libopus.so.0
     # (no libopus-dev/libopus.so symlink on a slim image) even though the
     # runtime lib is present -- load it explicitly rather than relying on
-    # auto-detection. Safe to call repeatedly.
+    # auto-detection. Safe to call repeatedly. Without this, voice silently
+    # produces nothing.
     if not discord.opus.is_loaded():
         discord.opus.load_opus("libopus.so.0")
 
 
-def _build_track_source(session, track_uri, quality=AudioQuality.VERY_HIGH):
-    # Blocking: resolves track metadata/CDN over the network and spawns ffmpeg.
-    track_id = TrackId.from_uri(track_uri)
-    loaded = session.content_feeder().load(track_id, VorbisOnlyAudioQuality(quality), False, None)
-    ogg_stream = loaded.input_stream.stream()
-    source = discord.FFmpegPCMAudio(ogg_stream, pipe=True)
-    return source, ogg_stream
+async def join_or_move(client, voice_channel):
+    """Connect to (or move into) a voice channel, returning the VoiceClient."""
+    guild = voice_channel.guild
+    voice_client = discord.utils.get(client.voice_clients, guild=guild)
+
+    if voice_client is not None and not voice_client.is_connected():
+        # A half-dead voice client stays registered against the guild in
+        # discord.py's own state, so connect() would raise "Already connected
+        # to a voice channel." rather than reconnecting. Drop it first.
+        logger.info("discarding stale voice client for guild %s before rejoining", guild.id)
+        try:
+            await leave(voice_client)
+        except Exception:
+            logger.warning("failed to cleanly drop stale voice client for guild %s",
+                           guild.id, exc_info=True)
+        voice_client = None
+
+    if voice_client is None:
+        return await voice_channel.connect()
+    if voice_client.channel.id != voice_channel.id:
+        await voice_client.move_to(voice_channel)
+    return voice_client
 
 
 async def join(voice_channel):
@@ -39,26 +56,3 @@ async def leave(voice_client):
     if voice_client.is_playing() or voice_client.is_paused():
         voice_client.stop()
     await voice_client.disconnect(force=True)
-
-
-async def play_track(voice_client, session, track_uri, *, loop=None, after=None):
-    """Fetch a track and play it on an already-connected VoiceClient.
-
-    The fetch (network + ffmpeg spawn) runs off the event loop. `after(error)`
-    is called (if given) once playback finishes, after the underlying
-    librespot stream has been closed.
-    """
-    ensure_opus_loaded()
-    loop = loop or asyncio.get_event_loop()
-    source, ogg_stream = await loop.run_in_executor(None, _build_track_source, session, track_uri)
-
-    def _after(error):
-        try:
-            ogg_stream.close()
-        except Exception:
-            logger.exception("error closing librespot stream after playback")
-        if after is not None:
-            after(error)
-
-    voice_client.play(source, after=_after)
-    return source

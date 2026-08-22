@@ -41,7 +41,7 @@ async def helpHandler(message:discord.Message):
         elif (instructions[1] == "spotify"):
             await message.channel.send("""
             ```,play``` join your voice channel and register the bot as a Spotify Connect device. Requires **Spotify Premium**.
-            If you haven't linked your Spotify account yet, this sends you a login link -- authorize it, then DM me the `code=` from the address bar and I'll link you and join your voice channel.
+            If you haven't linked your Spotify account yet, I'll DM you a login link -- authorize it, then paste the whole address-bar URL back to me in DM (the page it lands on won't load, that's normal) and I'll link you and join your voice channel.
             Once set up, open Spotify and select **Discord Bot** as your playback device -- control everything (play/pause/resume) from the Spotify app itself.
             ```,spotify unlink``` remove your linked Spotify account from the bot
             """)

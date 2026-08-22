@@ -47,13 +47,10 @@ from commands.gym import handleDailyGym, handleGymOptIn, sendGymMessage, handleG
 from commands.gameSubscription import subscribe, checkGameVersions
 from helpers.reminders import handleReminderCheck, addReminder,handleReminderAdd
 from commands.automagic import automagic
-from music.commands import handle_play, handle_spotify
-from music import callback_server as spotify_callback_server
+from music.commands import (handle_play, handle_spotify, handle_spotify_pasteback,
+                            has_pending_spotify_link, looks_like_paste_back)
 
 import logging
-
-# Set once in on_ready; guards against re-binding the port on gateway resume.
-_spotify_callback_runner = None
 
 @client.event
 async def on_ready():
@@ -70,6 +67,12 @@ async def on_message(message: discord.Message):
             await choices(message=message, client=client)
         elif message.content.startswith(",choices") or message.content.startswith("choices"):
             await saveChoices(message=message)
+        elif has_pending_spotify_link(message.author.id) and looks_like_paste_back(message.content):
+            # The Spotify link flow ends with the user pasting the redirect URL
+            # back here -- keymaster's only redirect is the user's own
+            # localhost, so no callback we host can catch it. See
+            # music/oauth_flow.py.
+            await handle_spotify_pasteback(message=message, client=client)
         return
     arr = []
     for match in re.finditer("https?\:\S+\.(png)|https?\:\S+\.(jpg)|https?\:\S+\.(jpeg)|https?\:\S+\.(gif)", message.content):
@@ -166,15 +169,6 @@ async def first_commant(interaction: discord.Interaction,hero:str):
 @client.event
 async def on_ready():
     list = await tree.sync(guild=None)
-    # on_ready fires again on every gateway resume, so only bind the callback
-    # server's port once -- a second bind would raise and kill the handler.
-    global _spotify_callback_runner
-    if _spotify_callback_runner is None:
-        try:
-            _spotify_callback_runner = await spotify_callback_server.start(client)
-        except Exception:
-            # The bot is still fully usable without it; only Spotify linking breaks.
-            logging.getLogger("main").exception("failed to start Spotify callback server")
     print("Ready!")
 
 async def tick():

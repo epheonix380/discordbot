@@ -1,239 +1,193 @@
+"""`,play` and `,spotify` -- the Discord surface of the Connect receiver.
+
+The flow, end to end:
+
+    ,play  ->  in a voice channel?  ->  linked?
+                                          no  -> DM an auth link; user pastes
+                                                 the redirect URL back (see
+                                                 music/oauth_flow.py for why it
+                                                 cannot be automatic)
+                                          yes -> join voice, spawn librespot,
+                                                 attach its PCM to the voice
+                                                 client
+
+Nothing plays as a result of `,play` itself. The bot becomes a Spotify Connect
+device named "Discord Bot"; playback starts when the user picks it in their own
+Spotify app. Free-text search / `,play <track>` were removed deliberately and
+must not come back -- see SPOTIFY_CONTEXT.md's "Scope change".
+"""
 import asyncio
 import json
 import logging
+import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import discord
-from librespot.proto import Connect_pb2 as Connect
 
 from helpers import spotifyStore
-from music import oauth_flow, playback, session_manager
-from music.connect_device import ConnectDevice
+from music import credentials, librespot_process, oauth_flow, playback, spotify_auth
+from music.pcm_source import LibrespotPCMSource
 
 logger = logging.getLogger("music.commands")
 
 PREMIUM_NOTICE = "**Spotify Premium is required** to stream through the bot."
+DEVICE_NAME = librespot_process.DEVICE_NAME
 
-STATE_REPORT_INTERVAL_SECONDS = 5
+# Every Spotify/librespot blocking call (token refresh, process spawn) runs
+# here rather than asyncio's shared default executor, so it can't queue behind
+# or contend with unrelated executor work elsewhere in the bot (Django DB
+# calls, image processing). Carried over from the old session_manager.
+SPOTIFY_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="spotify-worker")
 
-_connect_devices = {}  # str(member_id) -> ConnectDevice
-_connect_handlers = {}  # str(member_id) -> ConnectCommandHandler
+# How long a registered device may sit with no audio before we disconnect and
+# reap the process. A default, not a considered policy -- the user has not
+# picked one yet.
+IDLE_TIMEOUT_SECONDS = int(os.environ.get("SPOTIFY_IDLE_TIMEOUT_SECONDS", "600"))
+IDLE_CHECK_INTERVAL_SECONDS = 30
 
-
-async def _join_and_play(client: discord.Client, guild: discord.Guild, voice_channel, session, track_uri):
-    voice_client = discord.utils.get(client.voice_clients, guild=guild)
-    if voice_client is None or not voice_client.is_connected():
-        voice_client = await playback.join(voice_channel)
-    elif voice_client.channel.id != voice_channel.id:
-        await voice_client.move_to(voice_channel)
-    await playback.play_track(voice_client, session, track_uri)
-    return voice_client
-
-
-def _find_member_voice_channel(client: discord.Client, member_id):
-    """Look across every guild the bot shares with this member for their
-    current voice channel. Needed because a Connect "transfer" command
-    arrives with no Discord context at all -- just a Spotify track URI."""
-    member_id = int(member_id)
-    for guild in client.guilds:
-        member = guild.get_member(member_id)
-        if member is not None and member.voice is not None and member.voice.channel is not None:
-            return guild, member.voice.channel
-    return None, None
+_idle_tasks = {}  # str(member_id) -> asyncio.Task
 
 
-class ConnectCommandHandler:
-    """Bridges music.connect_device.ConnectDevice's dealer-thread callbacks
-    (on_transfer/on_resume/on_pause) into this bot's asyncio/Discord world.
+def _executor_call(loop, func, *args):
+    return loop.run_in_executor(SPOTIFY_EXECUTOR, func, *args)
 
-    Those callbacks run on librespot's own worker thread, not the event
-    loop, so every Discord action here is scheduled via
-    asyncio.run_coroutine_threadsafe and waited on synchronously (which is
-    fine -- we're not on the loop thread) so ConnectDevice.on_request can
-    still return a real SUCCESS/UPSTREAM_ERROR to Spotify. NOT verified
-    against a live dealer session -- see SPOTIFY_CONTEXT.md.
-    """
 
-    def __init__(self, client: discord.Client, loop, member_id, session):
-        self.client = client
-        self.loop = loop
-        self.member_id = member_id
-        self.session = session
-        self.connect_device = None  # set by the caller right after construction
-        self.guild_id = None
-        self.current_track_uri = None
-        self.is_paused = False
-        self._position_at_start_ms = 0
-        self._started_at_monotonic = None
-        self._report_task = None
+async def _dm(user, content):
+    """DM a user; returns False if their DMs are closed."""
+    try:
+        await user.send(content)
+        return True
+    except (discord.Forbidden, discord.HTTPException):
+        return False
 
-    def _run_coroutine(self, coro, timeout=20):
-        future = asyncio.run_coroutine_threadsafe(coro, self.loop)
-        return future.result(timeout=timeout)
 
-    def _current_position_ms(self):
-        if self._started_at_monotonic is None:
-            return self._position_at_start_ms
-        elapsed_ms = int((time.monotonic() - self._started_at_monotonic) * 1000)
-        return self._position_at_start_ms + elapsed_ms
-
-    def _mark_playing(self, track_uri, position_ms, is_paused):
-        self.current_track_uri = track_uri
-        self._position_at_start_ms = position_ms
-        self._started_at_monotonic = None if is_paused else time.monotonic()
-        self.is_paused = is_paused
-
-    def on_transfer(self, track_uri, position_ms, is_paused):
-        self._run_coroutine(self._do_transfer(track_uri, position_ms, is_paused))
-
-    def on_resume(self):
-        self._run_coroutine(self._do_resume())
-
-    def on_pause(self):
-        self._run_coroutine(self._do_pause())
-
-    async def _do_transfer(self, track_uri, position_ms, is_paused):
-        guild, voice_channel = _find_member_voice_channel(self.client, self.member_id)
-        if guild is None:
-            raise RuntimeError(f"member {self.member_id} isn't visibly in a voice channel the bot shares")
-        self.guild_id = guild.id
-        voice_client = await _join_and_play(self.client, guild, voice_channel, self.session, track_uri)
-        if is_paused:
-            voice_client.pause()
-        self._mark_playing(track_uri, position_ms, is_paused)
-        await self._report_state_async(Connect.PutStateReason.PLAYER_STATE_CHANGED)
-        self._ensure_report_task()
-
-    async def _do_resume(self):
-        voice_client = self._active_voice_client()
-        if voice_client is None:
-            raise RuntimeError("not connected to voice for this member's last known guild")
-        voice_client.resume()
-        self.is_paused = False
-        self._started_at_monotonic = time.monotonic()
-        await self._report_state_async(Connect.PutStateReason.PLAYER_STATE_CHANGED)
-
-    async def _do_pause(self):
-        voice_client = self._active_voice_client()
-        if voice_client is None:
-            raise RuntimeError("not connected to voice for this member's last known guild")
-        voice_client.pause()
-        self._position_at_start_ms = self._current_position_ms()
-        self.is_paused = True
-        self._started_at_monotonic = None
-        await self._report_state_async(Connect.PutStateReason.PLAYER_STATE_CHANGED)
-
-    def _active_voice_client(self):
-        guild = self.client.get_guild(self.guild_id) if self.guild_id else None
-        if guild is None:
-            return None
-        return discord.utils.get(self.client.voice_clients, guild=guild)
-
-    async def _report_state_async(self, reason):
-        if self.connect_device is None or self.current_track_uri is None:
-            return
-        await self.loop.run_in_executor(
-            session_manager.SPOTIFY_EXECUTOR,
-            self.connect_device.put_state,
-            reason,
-            not self.is_paused,
-            self.is_paused,
-            self.current_track_uri,
-            self._current_position_ms(),
+async def _send_link(message, auth_url):
+    body = (
+        "**Link your Spotify account** " + PREMIUM_NOTICE + "\n\n"
+        "1. Open this link and authorize:\n" + auth_url + "\n\n"
+        "2. Your browser will then fail to load a `127.0.0.1:5588` page — "
+        "**that's expected**, nothing is supposed to be listening there.\n\n"
+        "3. Copy the **whole URL** out of your browser's address bar and paste "
+        "it back to me here in DM.\n\n"
+        "_You only have to do this once._"
+    )
+    if await _dm(message.author, body):
+        if message.guild is not None:
+            await message.channel.send("Check your DMs — I've sent you a Spotify link.")
+    else:
+        await message.channel.send(
+            "I couldn't DM you (your DMs may be closed). Open them and run `,play` again."
         )
 
-    def _ensure_report_task(self):
-        if self._report_task is None or self._report_task.done():
-            self._report_task = self.loop.create_task(self._report_loop())
 
-    async def _report_loop(self):
-        try:
-            while True:
-                await asyncio.sleep(STATE_REPORT_INTERVAL_SECONDS)
-                if self.current_track_uri is None:
-                    continue
-                try:
-                    await self._report_state_async(Connect.PutStateReason.PLAYER_STATE_CHANGED)
-                except Exception:
-                    logger.exception("periodic Connect state report failed for member %s", self.member_id)
-        except asyncio.CancelledError:
-            pass
-
-    def close(self):
-        # Task.cancel() isn't documented as thread-safe; close() may be
-        # called from librespot's worker thread indirectly (e.g. a future
-        # command handler tearing itself down), so always hop onto the loop.
-        if self._report_task is not None:
-            task = self._report_task
-            self.loop.call_soon_threadsafe(task.cancel)
-            self._report_task = None
-
-
-def _ensure_connect_device(client: discord.Client, loop, member_id, session):
-    """Get-or-create the Connect receiver for this member's session. Idempotent
-    per member -- reuses the existing device/handler if one is already active."""
+async def _stop_session(member_id, guild=None, client=None):
+    """Tear down one member's playback: leave voice, reap librespot."""
     member_id = str(member_id)
-    device = _connect_devices.get(member_id)
-    if device is not None:
-        return device
-    handler = ConnectCommandHandler(client, loop, member_id, session)
-    device = ConnectDevice(session, handler, device_name=session_manager.DEFAULT_DEVICE_NAME)
-    handler.connect_device = device
-    _connect_devices[member_id] = device
-    _connect_handlers[member_id] = handler
-    return device
+
+    task = _idle_tasks.pop(member_id, None)
+    if task is not None:
+        task.cancel()
+
+    if client is not None and guild is not None:
+        voice_client = discord.utils.get(client.voice_clients, guild=guild)
+        if voice_client is not None:
+            try:
+                await playback.leave(voice_client)
+            except Exception:
+                logger.warning("failed to leave voice for member %s", member_id, exc_info=True)
+
+    loop = asyncio.get_event_loop()
+    await _executor_call(loop, librespot_process.stop, member_id)
+    credentials.forget(member_id)
 
 
-def _close_connect_device(member_id):
+async def _start_session(client, message, voice_channel):
+    """Join voice and bring up this member's Connect device. Returns an error
+    string for the user, or None on success."""
+    member_id = str(message.author.id)
+    loop = asyncio.get_event_loop()
+
+    started = time.monotonic()
+    try:
+        process = await _executor_call(
+            loop, librespot_process.ensure_running, member_id,
+            credentials.token_provider(member_id))
+    except credentials.NotLinkedError:
+        return "I don't have working Spotify credentials for you. Run `,spotify unlink`, then `,play` to relink."
+    except spotify_auth.SpotifyAuthError:
+        logger.exception("token refresh failed for member %s", member_id)
+        return ("Spotify wouldn't renew your login. Run `,spotify unlink`, then `,play` to relink.")
+    except librespot_process.LibrespotProcessError as exc:
+        logger.error("could not start librespot for member %s: %s", member_id, exc)
+        return "Couldn't start your Spotify session: %s" % exc
+    logger.info("librespot ready for member %s in %.2fs", member_id, time.monotonic() - started)
+
+    try:
+        voice_client = await playback.join_or_move(client, voice_channel)
+    except Exception:
+        logger.exception("failed to join voice for member %s", member_id)
+        await _stop_session(member_id)
+        return "Couldn't join your voice channel. Try `,play` again."
+
+    playback.ensure_opus_loaded()
+    if voice_client.is_playing():
+        voice_client.stop()
+    voice_client.play(LibrespotPCMSource(process.buffer, member_id=member_id))
+
+    _restart_idle_watchdog(client, member_id, voice_channel.guild.id, process)
+    return None
+
+
+def _restart_idle_watchdog(client, member_id, guild_id, process):
     member_id = str(member_id)
-    handler = _connect_handlers.pop(member_id, None)
-    if handler is not None:
-        handler.close()
-    device = _connect_devices.pop(member_id, None)
-    if device is not None:
-        try:
-            device.close()
-        except Exception:
-            logger.exception("error closing Connect device for member %s", member_id)
+    existing = _idle_tasks.pop(member_id, None)
+    if existing is not None:
+        existing.cancel()
+    _idle_tasks[member_id] = asyncio.ensure_future(
+        _idle_watchdog(client, member_id, guild_id, process))
 
 
-async def join_and_register_device(client: discord.Client, loop, member_id, guild: discord.Guild, voice_channel, session):
-    """Join the caller's voice channel and (re)register their Connect device
-    there. Nothing plays yet -- playback only starts once the Spotify app
-    sends a transfer command for this device."""
-    t0 = time.monotonic()
-    voice_client = discord.utils.get(client.voice_clients, guild=guild)
-    if voice_client is not None and not voice_client.is_connected():
-        # A half-dead voice client is still registered against this guild in
-        # discord.py's own state, so calling connect() would raise
-        # "Already connected to a voice channel." rather than reconnecting.
-        # Tear it down first so the fresh connect below can succeed.
-        logger.info("discarding stale voice client for guild %s before rejoining", guild.id)
-        try:
-            await playback.leave(voice_client)
-        except Exception:
-            logger.warning("failed to cleanly drop stale voice client for guild %s",
-                           guild.id, exc_info=True)
-        voice_client = None
+async def _idle_watchdog(client, member_id, guild_id, process):
+    """Disconnect and reap once nobody is listening.
 
-    if voice_client is None:
-        voice_client = await playback.join(voice_channel)
-    elif voice_client.channel.id != voice_channel.id:
-        await voice_client.move_to(voice_channel)
-    t1 = time.monotonic()
-    logger.info("join_and_register_device: voice join took %.2fs", t1 - t0)
+    Three ways a session ends: the audio stops for IDLE_TIMEOUT_SECONDS, the
+    voice channel empties, or the voice client goes away. Without this, a
+    registered device would hold a process (and the user's credentials) open
+    indefinitely.
+    """
+    last_bytes = process.buffer.total_written
+    last_audio_at = time.monotonic()
+    try:
+        while True:
+            await asyncio.sleep(IDLE_CHECK_INTERVAL_SECONDS)
 
-    # ConnectDevice registration talks to Spotify's dealer (websocket
-    # registration + an initial put_state), which is blocking network I/O.
-    # Running it inline stalled the event loop long enough for discord.py to
-    # log "Shard ID None has stopped responding to the gateway". Runs on the
-    # dedicated Spotify executor, not the shared default one -- see
-    # session_manager.SPOTIFY_EXECUTOR.
-    await loop.run_in_executor(session_manager.SPOTIFY_EXECUTOR, _ensure_connect_device, client, loop, member_id, session)
-    t2 = time.monotonic()
-    logger.info("join_and_register_device: _ensure_connect_device (executor) took %.2fs", t2 - t1)
-    _connect_handlers[str(member_id)].guild_id = guild.id
-    return voice_client
+            guild = client.get_guild(guild_id)
+            voice_client = discord.utils.get(client.voice_clients, guild=guild) if guild else None
+            if voice_client is None or not voice_client.is_connected():
+                logger.info("voice client gone for member %s; reaping librespot", member_id)
+                await _stop_session(member_id)
+                return
+
+            humans = [m for m in voice_client.channel.members if not m.bot]
+            if not humans:
+                logger.info("voice channel empty for member %s; reaping librespot", member_id)
+                await _stop_session(member_id, guild=guild, client=client)
+                return
+
+            written = process.buffer.total_written
+            if written != last_bytes:
+                last_bytes = written
+                last_audio_at = time.monotonic()
+            elif time.monotonic() - last_audio_at >= IDLE_TIMEOUT_SECONDS:
+                logger.info("no audio for %ss from member %s; reaping librespot",
+                            IDLE_TIMEOUT_SECONDS, member_id)
+                await _stop_session(member_id, guild=guild, client=client)
+                return
+    except asyncio.CancelledError:
+        pass
+    except Exception:
+        logger.exception("idle watchdog crashed for member %s", member_id)
 
 
 async def handle_play(message: discord.Message, client: discord.Client):
@@ -243,78 +197,34 @@ async def handle_play(message: discord.Message, client: discord.Client):
         return
     voice_channel = voice_state.channel
 
-    # TEMPORARY debug detour -- isolating the Discord voice/audio-piping
-    # question from Spotify/librespot entirely. No session, no dealer, no
-    # ConnectDevice -- just discord.py voice connect + FFmpegPCMAudio from a
-    # local file. Revert once voice is confirmed working. See conversation
-    # with the user, 2026-08-09.
-    playback.ensure_opus_loaded()
-    voice_client = discord.utils.get(client.voice_clients, guild=message.guild)
-    await message.channel.send(f"Debug:1")
-    if voice_client is not None and not voice_client.is_connected():
-        try:
-            await playback.leave(voice_client)
-        except Exception:
-            logger.warning("failed to drop stale voice client for guild %s", message.guild.id, exc_info=True)
-        voice_client = None
-    if voice_client is None:
-        voice_client = await playback.join(voice_channel)
-        await message.channel.send(f"Debug: joining {voice_channel}")
-    elif voice_client.channel.id != voice_channel.id:
-        await voice_client.move_to(voice_channel)
-    source = discord.FFmpegPCMAudio("test.mp3")
-    voice_client.play(source)
-    await message.channel.send(f"Debug: playing test.mp3 in {voice_channel.name}.")
-    return
-
     link = await spotifyStore.getLink(message.author.id)
     loop = asyncio.get_event_loop()
 
-    if link is None:
-        auth_url = await loop.run_in_executor(
-            session_manager.SPOTIFY_EXECUTOR, oauth_flow.start_link, message.author.id, message.guild.id, voice_channel.id)
-        await message.channel.send(
-            "You haven't linked Spotify yet. " + PREMIUM_NOTICE + "\n"
-            "Authorize here and you're done -- I'll pick it up automatically and "
-            "join your voice channel:\n" + auth_url
-        )
+    if link is None or credentials.needs_relink(link["credentials"]):
+        auth_url = await _executor_call(
+            loop, oauth_flow.start_link, message.author.id,
+            message.guild.id, voice_channel.id)
+        await _send_link(message, auth_url)
         return
 
-    t_start = time.monotonic()
-    try:
-        credentials_json = json.loads(link["credentials"])
-        session = await loop.run_in_executor(
-            session_manager.SPOTIFY_EXECUTOR, session_manager.get_session, message.author.id, credentials_json)
-    except Exception:
-        logger.exception("failed to build librespot session for member %s", message.author.id)
-        await message.channel.send(
-            "Couldn't connect to your Spotify account. Try `,spotify unlink` then `,play` again to relink."
-        )
+    error = await _start_session(client, message, voice_channel)
+    if error:
+        await message.channel.send(error)
         return
-    logger.info("handle_play: get_session (executor) took %.2fs", time.monotonic() - t_start)
-
-    t_join = time.monotonic()
-    try:
-        await join_and_register_device(client, loop, message.author.id, message.guild, voice_channel, session)
-    except Exception:
-        logger.exception("failed to join/register Connect device for member %s", message.author.id)
-        await message.channel.send("Couldn't join your voice channel and register as a Spotify Connect device. Try `,play` again.")
-        return
-    logger.info("handle_play: join_and_register_device took %.2fs (total %.2fs)",
-               time.monotonic() - t_join, time.monotonic() - t_start)
 
     await message.channel.send(
-        f"Ready! Open Spotify and select **{session_manager.DEFAULT_DEVICE_NAME}** as your playback device "
-        f"to start listening in {voice_channel.name}."
+        "Ready! Open Spotify, tap the devices button and pick **%s** to start "
+        "listening in %s." % (DEVICE_NAME, voice_channel.name)
     )
 
 
 async def handle_spotify(message: discord.Message, client: discord.Client):
     parts = message.content.split()
     if len(parts) >= 2 and parts[1] == "unlink":
+        guild = message.guild
+        await _stop_session(message.author.id, guild=guild, client=client)
+        oauth_flow.cancel(message.author.id)
         deleted = await spotifyStore.deleteLink(message.author.id)
-        _close_connect_device(message.author.id)
-        session_manager.close_session(message.author.id)
         if deleted:
             await message.channel.send("Unlinked your Spotify account.")
         else:
@@ -322,3 +232,66 @@ async def handle_spotify(message: discord.Message, client: discord.Client):
         return
     await message.channel.send("Usage: `,spotify unlink`")
 
+
+async def handle_spotify_pasteback(message: discord.Message, client: discord.Client):
+    """DM handler: the user pastes the redirect URL they were sent to."""
+    loop = asyncio.get_event_loop()
+    member_id = message.author.id
+
+    try:
+        credentials_json, pending = await _executor_call(
+            loop, oauth_flow.complete_link, member_id, message.content)
+    except KeyError as exc:
+        await message.channel.send(
+            "I don't have a link in progress for you (%s). Run `,play` in a "
+            "server to start one." % exc)
+        return
+    except spotify_auth.SpotifyAuthError:
+        logger.exception("code exchange failed for member %s", member_id)
+        await message.channel.send(
+            "Spotify wouldn't accept that code. Make sure you pasted the whole "
+            "URL from the address bar, or run `,play` again for a fresh link."
+        )
+        return
+
+    await spotifyStore.setLink(
+        member_id,
+        credentials=json.dumps(credentials_json),
+        scope=credentials_json.get("scope", ""),
+    )
+
+    guild = client.get_guild(pending["guild_id"]) if pending.get("guild_id") else None
+    voice_channel = (guild.get_channel(pending["voice_channel_id"])
+                     if guild and pending.get("voice_channel_id") else None)
+    member = guild.get_member(member_id) if guild else None
+
+    # Only auto-join if they're still where they started -- checked live, not
+    # trusted from the pending record.
+    still_there = (
+        member is not None and member.voice is not None
+        and member.voice.channel is not None and voice_channel is not None
+        and member.voice.channel.id == voice_channel.id
+    )
+    if not still_there:
+        await message.channel.send(
+            "Spotify linked. Hop into a voice channel and run `,play` to get started."
+        )
+        return
+
+    error = await _start_session(client, message, voice_channel)
+    if error:
+        await message.channel.send("Spotify linked, but " + error[0].lower() + error[1:])
+        return
+
+    await message.channel.send(
+        "Spotify linked, and I've joined **%s**. Open Spotify and pick **%s** "
+        "as your device to start playing." % (voice_channel.name, DEVICE_NAME)
+    )
+
+
+def has_pending_spotify_link(user_id):
+    return oauth_flow.has_pending(user_id)
+
+
+def looks_like_paste_back(content):
+    return oauth_flow.looks_like_paste_back(content)

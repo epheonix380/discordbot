@@ -1,11 +1,284 @@
 # SPOTIFY_CONTEXT.md — session state for the Spotify Connect feature
 
+> ## ⛔ SUPERSEDED — read `LIBRESPOT_RUST_PLAN.md` first
+>
+> As of **2026-08-10** the librespot-python approach documented below has been **abandoned**. Nine
+> distinct defects were found in that library's Connect/dealer half and the device never once
+> appeared in a real Spotify app. The feature is being rebuilt on the **Rust `librespot` binary**
+> run as a subprocess.
+>
+> This file remains valuable as **history** and, above all, for its record of what was
+> **verified live** — Discord voice on discord.py 2.7.1 + davey, the OAuth link flow, the
+> `load_opus` requirement. Do not implement the architecture described here.
+
 **Purpose:** onboard a fresh agent fast on the *feature* work (Spotify Connect bot). Read
 `SPOTIFY_CONNECT_PLAN.md` first, then this file.
 
 > This is **not** the repo's `CONTEXT.md` (that one documents the completed, live hosting/
 > deployment project — containerization, systemd, watchdog — and must not be overwritten or
 > reused for this feature's notes).
+
+---
+
+# ⚠️ SESSION 2026-08-09/10 — LIVE DEBUGGING. READ THIS FIRST.
+
+This session ran the feature against a **real Spotify Premium account and the live bot** for the
+first time — the "manual pass" every phase below was waiting on. It invalidates several
+assumptions in the older sections and found **three real bugs, all now fixed**. Everything below
+this section predates it.
+
+## TL;DR
+
+| Layer | Status |
+|---|---|
+| OAuth link → librespot `Session` → `content_feeder` → ffmpeg → PCM | ✅ **VERIFIED WORKING** against a real Premium account |
+| librespot dealer websocket (Connect device registration) | ✅ **BUG FOUND + FIXED** — device now registers |
+| Discord **voice** connection | ✅ **FIXED + VERIFIED LIVE** — `discord.py` 2.3.2 → 2.7.1 + `davey`; audible audio in a real VC, clean disconnect |
+| Spotify Connect end-to-end (device appears in app, transfer plays audio) | ⛔ Still unverified — this is now the next thing to test |
+
+## 1. ✅ The audio pipeline genuinely works (no longer an assumption)
+
+Ran the whole flow by hand, outside the bot, with a **real Premium account**: generated the auth
+URL, the user authorized it, the hosted callback caught the code, and the script exchanged it and
+piped audio to a file. Results:
+
+- Token exchange succeeded; `save_creds()` blob is as documented in Phase 2.
+- `Session.Builder().create()` authenticated — `session.username()` returned a real username
+  (`31gfmisimhdtf6sqd4627uhmmtq4`).
+- `content_feeder().load()` streamed **real** Ogg/Vorbis from Spotify.
+- ffmpeg decoded to PCM: **1,918,924 bytes** vs 1,920,000 expected for 10s @48kHz/stereo/s16le
+  (~0.03s short — stream-boundary rounding, not a bug). **89.8% non-silent samples**, peak
+  amplitude ±~28k, i.e. actual music, not silence.
+
+**Consequence:** `oauth_flow.py`, `session_manager.py`, `content_pipeline.py` and librespot's
+core streaming are **cleared**. Do not go hunting there for playback bugs. Phase 2's and Phase 4's
+"NOT verified — needs a real account" gaps are now **closed**.
+
+## 2. ✅ Real bug in librespot-python: the dealer websocket never connected (FIXED)
+
+`DealerClient.connect()` in the pinned commit builds a `ConnectionHolder` wrapping
+`websocket.WebSocketApp(url)` but **never assigns `on_open`/`on_message`/`on_error` onto that
+WebSocketApp, and never calls `run_forever()`** (confirmed: `run_forever` appears nowhere in
+`core.py`). The socket is structurally incapable of ever opening.
+
+This is fatal for Mode A specifically: the Connect receiver is driven *entirely* by frames on that
+socket — the pusher `connection_id` arrives there, and that is what triggers
+`put_state(NEW_DEVICE)`, which is what makes the device appear in the user's Spotify app. Dead
+socket ⇒ **device can never appear**, no matter what this bot does.
+
+**Fixed** in `music/connect_device.py` via `_patch_dealer_connect()` (idempotent, applied at import
+time): wires the callbacks and runs `ws.run_forever()` on a daemon thread. **Verified live** — the
+log now shows `Connect device 'Discord Bot' got a connection_id, registering as NEW_DEVICE`, which
+had never happened before.
+
+This is a *third* librespot bug, on top of the shared-listener-dict and bare-import bugs already
+documented in Phase 5. Note the pattern: **this library's Connect/dealer half is largely untested
+upstream — read its source before trusting any of it.**
+
+> A `NameError: threading is not defined` slipped into the first version of this patch (missing
+> import) and briefly made *every* session build fail with "couldn't start a session / make sure
+> it's Premium". Fixed. Flagging because that error message is misleading — it is not a Premium
+> problem.
+
+## 2b. Two MORE librespot dealer bugs (#4 and #5) — found 2026-08-10, both fixed
+
+Fixing the dead socket (§2) only exposed the next two. Both are in `music/connect_device.py` as
+idempotent import-time monkeypatches, next to the existing ones.
+
+### Bug #4 — `DealerClient.wait_for_listener()` has its condition inverted (deadlock)
+
+```python
+def wait_for_listener(self):
+    with self.__message_listeners_lock:
+        if self.__message_listeners == {}:
+            return                              # no listeners -> proceed
+        self.__message_listeners_lock.wait()    # listeners exist -> BLOCK FOREVER
+```
+
+`ConnectionHolder.on_message()` calls this before dispatching **every** inbound frame, so once our
+listeners are registered the websocket's reader thread parks in `wait()` and nothing is ever
+delivered — no `connection_id`, no transfer, no pause/resume. Fixed by
+`_patch_dealer_wait_for_listener()` to the evidently-intended semantics (return if a listener
+exists; otherwise wait, *bounded*, for one).
+
+**This is why §2 appeared to work and then "regressed" with no code change — it was always a
+race**, and worth internalising before trusting any future "it worked once" result here:
+
+- *Session built fresh*: dealer connects inside `Session.authenticate()`, the pusher frame arrives
+  while the reader is parked, then `ConnectDevice` registers listeners → `add_message_listener()`
+  calls `notify_all()` → reader wakes → frame dispatches → **device appears.**
+- *Session already cached*: registration finishes first (~0.01s), socket opens a second later, the
+  frame hits an already-blocked reader and no further `add_*` call is coming → **device never
+  appears.**
+
+Verified directly against the real class (not mocked): with zero listeners it returns immediately,
+with one registered it never returns, and a second `add_message_listener()` releases it.
+
+### Bug #5 — `handle_message()` b64-decodes a list
+
+`payloads` arrives as a JSON **array** of base64 chunks; librespot passes it straight to
+`base64.b64decode()`, raising `TypeError: argument should be a bytes-like object or ASCII string,
+not 'list'`. The websocket library swallows this into an `error from callback` log, so the frame is
+silently dropped. Observed live at 04:51:39 the moment the deadlock fix let real traffic through.
+
+Fixed by `_patch_dealer_handle_message()`, which joins the chunks **before** decoding (correct for
+a payload split mid-base64-quantum — verified with a deliberately mid-quantum split) and hands the
+frame to librespot's own unmodified logic.
+
+### Also fixed: header case-sensitivity (latent, would have broken transfer)
+
+`__get_headers()` is annotated `-> CaseInsensitiveDict` but returns the raw JSON dict. Header names
+are case-insensitive on the wire, so a lowercase `content-type`/`transfer-encoding` would miss
+`handle_message`'s and `handle_request`'s branches — sending a JSON body through `b64decode`, or
+leaving a gzipped request payload uncompressed so `payload.get("message_id")` yields `None` and a
+transfer from the app quietly does nothing. Both patches now wrap headers in a real
+`CaseInsensitiveDict`; verified that `connect_device.py:196`'s `headers.get("Spotify-Connection-Id")`
+resolves a lowercase `spotify-connection-id` off the wire.
+
+Both patches log the raw frame (pusher frames and all requests at INFO) — the Connect wire shape is
+still the biggest unverified assumption in this feature, and this is where it can be observed.
+
+## 2c. Spotify access-point selection is a coin flip (fixed in `session_manager`)
+
+`apresolve.spotify.com` returns a pool of access points and librespot picks **one at random**
+(`ApResolver.get_random_of` → `random.choice`) with no retry. Measured from this host:
+
+```
+ap-guc3.spotify.com:4070  OK        ap-gae2.spotify.com:4070  OK
+ap-guc3.spotify.com:443   REFUSED   ap-gue1.spotify.com:443   OK
+ap-guc3.spotify.com:80    OK        ap-gew4.spotify.com:80    REFUSED
+```
+
+2 of 6 actively refuse TCP, so **~1 in 3 logins died on a coin flip** — that is what produced the
+`ConnectionRefusedError` at `core.py:1910` that killed a `,play` and a re-link on 2026-08-10. Not a
+firewall or an outage; don't go hunting for one.
+
+`session_manager.build_session()` now retries up to `AP_CONNECT_ATTEMPTS` (5) times, rebuilding the
+`Session.Builder` each time so the AP is re-rolled. ~33% failure → ~0.4%. Only connection-level
+errors retry; an auth failure is not going to fix itself on the next AP.
+
+## 3. ✅ RESOLVED: Discord voice rejected `discord.py==2.3.2` (close code 4006)
+
+**Symptom:** `,play` joins voice, then drops ~10s later; nothing ever plays.
+
+**What the logs actually show:** `voice_channel.connect()` internally retries **5 times**, and
+*every* attempt — including the first, on a gateway session seconds old — is closed by Discord
+with **4006 ("session no longer valid")**. That burns ~27s, after which `vc.play()` raises
+`ClientException: Not connected to voice`. The `Shard ID None has stopped responding to the
+gateway` spam is a **downstream symptom** of the failed handshakes, **not** the cause.
+
+**Root cause:** `discord.py==2.3.2` offers only the legacy voice encryption modes
+(`VoiceClient.supported_modes` == `xsalsa20_poly1305{,_lite,_suffix}`). Discord has since removed
+those. discord.py's own changelog for **v2.5.0** says it added AEAD XChaCha20-Poly1305
+*"to allow voice to continue working when the older encryption modes eventually get removed."*
+Our client offers only retired modes ⇒ rejected on every voice IDENTIFY.
+
+### Proven by elimination — do NOT re-litigate these
+
+Each of these was tested and produced the **identical** 5×4006 failure:
+
+1. Full `,play` path (Spotify session + Connect device).
+2. `,play` reduced to **local `test.mp3` only** — zero Spotify/librespot code involved.
+3. **discord.py's own official voice example, verbatim, in a separate clean process** with no
+   imports from this repo, same token/guild/channel. Also 4006. ← most conclusive.
+
+Therefore **ruled out**: our architecture/complexity, Spotify/librespot, threading/GIL/event-loop
+starvation, gateway intents (`Intents.default()` already includes `voice_states`), and
+network/firewall/ports (DNS resolves the voice endpoint, TCP:443 to it connects, outbound UDP
+works — and a firewall block cannot produce a *graceful protocol-level close code* anyway).
+
+Earlier suspicion that blocking librespot calls were starving the event loop was **wrong**;
+timing logs proved `_ensure_connect_device` takes 0.00s and the entire ~27s is inside discord.py's
+own retry loop.
+
+### The fix (complete, verified live 2026-08-10)
+
+- `requirements.txt`: `discord.py` **2.3.2 → 2.7.1**, and the separate legacy `discord==2.3.2`
+  pin **deleted** (that shim package was never published past 2.3.2; `discord.py` provides the
+  `discord` module itself).
+- **2.7.1 then raised `RuntimeError: davey library needed in order to use voice`.** discord.py
+  ≥2.7 hard-requires the `davey` package (Rust/OpenMLS impl of Discord's DAVE protocol) for voice
+  — the check is unconditional in `VoiceClient.__init__` (`voice_client.py`), right next to the
+  PyNaCl one, so there is no way to opt out. It ships in the `discord.py[voice]` extra.
+- `davey==0.1.6` added to `requirements.txt`. cp39 `manylinux_2_17_x86_64` wheels exist (verified
+  against PyPI's file listing), so it installs from a wheel on `python:3.9.13-slim` — **no Rust
+  toolchain needed in the image**, and no `Dockerfile` change was required.
+
+**Verified in the rebuilt container:** `davey 0.1.6`, `DAVE_PROTOCOL_VERSION 1`,
+`has_nacl True has_dave True`, and
+`VoiceClient.supported_modes == ('aead_xchacha20_poly1305_rtpsize', 'xsalsa20_poly1305_lite',
+'xsalsa20_poly1305_suffix', 'xsalsa20_poly1305')`.
+
+**Verified live in a real voice channel** — the first proof Discord voice works here at all:
+
+```
+Starting voice handshake... (connection attempt 1)
+Voice handshake complete. Endpoint found: c-sea01-3ae6ea8a.discord.media:8443
+Voice connection complete.
+debug play: connected to General in 0.51s
+```
+
+**One** attempt, 0.51s, zero 4006s — against 5 attempts × 4006 burning ~27s before. The user
+confirmed the audio was **audible** in the channel and the bot disconnected cleanly afterwards.
+That clears Phase 3's outstanding acceptance criterion ("audible hard-coded track in a real VC;
+clean disconnect") and, with it, the whole Discord-voice half of the stack: gateway voice
+handshake, DAVE/encryption, UDP, `load_opus("libopus.so.0")`, and `FFmpegPCMAudio` piping.
+
+Upgrade-risk note: 2.3.2 → 2.7.1 is a 4-minor jump. Changelog skim surfaced a voice rewrite in
+2.4.0 and `abc.Messageable.pins()` becoming an async iterator in 2.6.0 (old `await` form still
+works, now deprecated). Nothing found that breaks this bot's usage (`discord.Client`,
+`app_commands.CommandTree`, `on_message`, `FFmpegPCMAudio`, `load_opus`), but the rest of the bot
+has **not** been regression-tested on 2.7.1 — do that.
+
+## 4. ✅ The debug state has been reverted
+
+Was: `handle_play()` gutted down to a local-`test.mp3` detour, with the real Spotify flow below it
+unreachable. **Now reverted** — `music/commands.py`'s `handle_play` is back to the real flow
+(link check → `get_session` → `join_and_register_device` → "Ready! Open Spotify and select
+**Discord Bot**..."), the `_debug_play_local_file` helper and every `Debug:N` message are gone, and
+`test.mp3` is deleted from the repo and the image. Rebuilt and restarted on the reverted code.
+
+⚠️ **`/run/discordbot.maintenance` IS STILL SET.** The watchdog is standing down, so a wedged bot
+will **not** be auto-restarted. **This must be cleared:** `sudo rm /run/discordbot.maintenance`
+(needs root; the agent has no passwordless sudo — ask the user). It self-clears on reboot.
+
+## 5. Smaller findings
+
+- **`main.py` intents bug:** `intents.all()` is called and its **return value discarded**
+  (`Intents.all()` returns a *new* object; it does not mutate in place). That line is dead. It is
+  **not** the voice bug — `Intents.default()` already enables `voice_states` — but it clearly
+  does not do what it was written to do. Worth fixing.
+- The image's `ENTRYPOINT` (`entrypoint.sh`) **ignores any command passed to `docker run`** and
+  always execs `main.py`. To run a script in the image you **must** pass
+  `--entrypoint python`. Getting this wrong silently starts a *second bot instance* — it happened
+  once this session and was killed immediately.
+- Running anything that needs port 8888 (the OAuth callback) requires stopping the production
+  container first; nginx→127.0.0.1:8888 is the only path in from the internet.
+- `py-spy` could not attach inside the container (needs `CAP_SYS_PTRACE`, not granted). Would
+  require adding `cap_add` to `docker-compose.yml` if thread-level profiling is ever wanted.
+
+## 6. Next steps, in order
+
+Steps 1–3 of the original list (rebuild for `davey`, prove voice with `test.mp3`, revert the
+debug detour) are **done** — see §3 and §4. What's left:
+
+1. **Test the real Connect flow end to end** — this is now the only thing blocking the feature:
+   `,play` → device appears in the Spotify app → transfer from the app → audio in the VC →
+   pause/resume. With the dealer fix (§2) and the voice fix (§3) both in place this is finally
+   reachable for the first time. **Watch the log for `Unhandled Connect endpoint` warnings** —
+   that is the still-unverified assumption about Connect's JSON command shape (see Phase 5), and
+   `on_request` logs every raw command unconditionally so this pass self-documents whether the
+   assumed shape is right.
+2. Clear `/run/discordbot.maintenance` (needs root — see §4).
+3. Regression-check the non-Spotify parts of the bot on discord.py 2.7.1.
+4. Commit. Everything from this session is still **uncommitted** on
+   `claude/spotify-connect-bot-step-1-in130u`: `requirements.txt` (the discord.py/davey fix),
+   `music/commands.py` (debug detour added then reverted — should end up a no-op vs `e29f31c`
+   apart from that file's own committed debug block being removed), and this file.
+
+Still-open items from earlier phases that this session did **not** touch: token refresh
+(plan §5.5), the natural-end-of-track stale-state gap, and `put_connect_state` failing silently on
+non-200.
 
 ---
 
