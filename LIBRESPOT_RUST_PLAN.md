@@ -4,6 +4,9 @@
 **Revised:** 2026-08-15 — §3.3, §3.4, §5.2, Step 0, Step 1, Step 2, Step 4 and Part 6 all changed
 after reading the librespot v0.8.0 source and proving the token half of the flow live. §5.2's
 old "Option A vs Option B" recommendation was **wrong** and is now replaced.
+**Revised:** 2026-08-22 — §5.2's paste-back decision is **superseded**. Keymaster accepts the OAuth
+device authorization grant, which needs no redirect URI at all, so the link flow is now a pairing
+link the bot polls on. Verified live through login5. Steps 4/5 rebuilt on it.
 **Branch:** `claude/spotify-connect-bot-step-1-in130u` (based on `production`).
 **Audience:** a fresh agent picking this up cold, plus the user.
 
@@ -15,13 +18,14 @@ old "Option A vs Option B" recommendation was **wrong** and is now replaced.
 | 1 — binary in the image | ✅ **DONE 2026-08-15.** `rust:slim-bullseye` build stage; `docker exec discordbot librespot --version` works and `--backend ?` lists `pipe`. Bot redeployed and healthy, 0 tracebacks |
 | 2 — supervisor | ✅ **DONE 2026-08-15** (`music/librespot_process.py`). 10 spawn/teardown cycles: no orphans, no fd leak (4→4), registry clean, process cap enforced, restart-with-backoff exercised. Live spawn-to-registered-device not yet re-verified through this code — needs a fresh credential |
 | 3 — audio bridge | ✅ **DONE 2026-08-15** (`music/pcm_source.py`). Starved source emits silence not `b''`; byte-exact frames; 50 frames no drift; partial tail never torn; bounded writer provably blocks (the backpressure that paces librespot) |
-| 4 — link UX | ✅ **BUILT 2026-08-15** (`music/oauth_flow.py` + `music/spotify_auth.py` + `music/credentials.py`). DM paste-back; librespot-python gone. **Not yet exercised live** |
+| 4 — link UX | ✅ **REBUILT 2026-08-22 on the device authorization grant** (`music/oauth_flow.py` + `music/spotify_auth.py` + `music/credentials.py`). No paste-back, no callback: bot DMs a `spotify.com/pair` link and polls. Token half verified live against keymaster + login5; the Discord half not yet |
 | 5 — wiring + deletion | ✅ **BUILT 2026-08-15** (`music/commands.py`, `music/playback.py`, `main.py`). Old stack deleted, `librespot` dropped from `requirements.txt`, image rebuilt, bot deployed healthy with 0 tracebacks. **End-to-end acceptance still unverified — needs the user** |
 | 6 — regression + cleanup | not started |
 
 **What is left before this feature can be called done:** one live pass by the user — `,play` →
-link → paste back → pick the device in Spotify → hear audio in the voice channel. Everything up to
-that point is verified; that specific chain has never been run through this code.
+open the DM'd pairing link → approve → pick the device in Spotify → hear audio in the voice
+channel. Everything up to that point is verified; that specific chain has never been run through
+this code.
 
 **Step 0 evidence (all live, real Premium account, 2026-08-15):**
 
@@ -41,7 +45,9 @@ that point is verified; that specific chain has never been run through this code
    is first-party-only, proven by a three-way test in §5.2. A `--client-id` patch was built and
    does not rescue it.
 2. Keymaster **rejects our hosted HTTPS redirect** (`redirect_uri: Not matching configuration`), and
-   its whitelist is Spotify's. **The link UX therefore reverts to DM paste-back** — see §5.2.
+   its whitelist is Spotify's — so no callback we host can ever catch an authorization code.
+   **Resolved 2026-08-22 by dropping the code grant entirely**: keymaster supports the OAuth
+   **device authorization grant** (RFC 8628), which has no redirect. See §5.2.
 3. Pass the token via **`LIBRESPOT_ACCESS_TOKEN`**, never `--access-token`: argv is world-readable
    through `/proc`, and librespot only redacts it in its own logs. Verified: with the env var set,
    `/proc/<pid>/cmdline` carries no token.
@@ -632,9 +638,9 @@ login5 (which spirc needs, for the spclient token behind every connect-state PUT
 1. The OAuth authorization must use **keymaster**, whose redirect whitelist is Spotify's.
 2. The only usable redirect is `http://127.0.0.1:5588/login`, which resolves on the **user's own**
    machine. We cannot receive the code, so linking cannot be automatic.
-3. **The link UX is DM paste-back**: bot sends the auth link → user authorizes → their browser
-   fails to load `127.0.0.1:5588` → user copies the URL from the address bar → DMs it to the bot.
-   This is what the code did before commit `a299b94`; restore that path from git history.
+3. ~~**The link UX is DM paste-back**~~ — **SUPERSEDED 2026-08-22, see the device-grant section
+   below.** Consequences 1, 2, 4 and 5 all still hold; this one only ever followed from assuming
+   the *authorization code* grant, which is the sole flow that needs a redirect at all.
 4. `music/callback_server.py`, the nginx `spotify-callback` vhost, and the `SPOTIFY_CLIENT_ID` /
    `SPOTIFY_REDIRECT_URL` env vars become **dead code** for this feature.
 5. **No fork needed.** Production runs stock librespot on its keymaster default, so Step 1 keeps a
@@ -644,8 +650,59 @@ login5 (which spirc needs, for the spclient token behind every connect-state PUT
 **The one thing that could still overturn this** (~15% odds, not tested): the dev-app token carried
 7 scopes vs keymaster's 26, so `BAD_REQUEST` *might* be about scopes rather than client eligibility.
 Testing it costs one user click — re-authorize the dev app with the full valid-third-party scope set
-through the existing hosted callback and rerun row 3. The user chose to proceed with paste-back
-rather than run it.
+through the existing hosted callback and rerun row 3. **Still untested, and now moot** — the device
+grant below removes the reason to care.
+
+### ✅ SOLVED 2026-08-22: keymaster supports the DEVICE AUTHORIZATION GRANT. No paste-back, no callback.
+
+Everything above is about the **authorization code** grant, the only OAuth flow that needs a
+redirect URI. Keymaster also accepts **RFC 8628**, which has none — so the redirect whitelist that
+forced paste-back simply does not apply.
+
+```
+POST https://accounts.spotify.com/oauth2/device/authorize
+     client_id=65b708073fc0480ea92a077233ca87bd&scope=<the 26 scopes>
+  → 200 {"device_code":"…","user_code":"XQVRMF","interval":5,"expires_in":3599,
+         "verification_uri_complete":"https://spotify.com/pair?code=XQVRMF"}
+
+POST https://accounts.spotify.com/api/token
+     grant_type=urn:ietf:params:oauth:grant-type:device_code&device_code=…
+  → 400 {"error":"authorization_pending"}     … until the user approves, then
+  → 200 {access_token, refresh_token, scope: <all 26>, expires_in: 3600}
+```
+
+**Verified live, end to end, 2026-08-22** against the real Premium account:
+
+- Approval came back after 2 polls with **a refresh token and all 26 requested scopes** (28
+  returned) — the same grant the paste-back flow yielded.
+- **login5 accepts a device-grant token.** librespot started with it logged
+  `Authenticated as '31gfmisimhdtf6sqd4627uhmmtq4' !`, resolved
+  `guc3-spclient.spotify.com:443` as its spclient AP, reached
+  `librespot_connect::spirc active device is <> with session <…>`, and then loaded and played real
+  tracks transferred from the user's app. **No `could not initialize spirc: Login request was
+  denied`** — the exact failure that killed the dev-app route in the matrix above.
+- `spotify_auth.refresh_credentials()` works on the resulting refresh token **unmodified**: two
+  consecutive refreshes, both returning 28 scopes, and the superseded token correctly rejected with
+  HTTP 400. The rotation hazard documented below applies identically and is already handled.
+
+**Why this is also better than the hosted callback ever was.** Commit `a299b94`'s design note says
+the `state` parameter was *"the only thing tying an inbound HTTP callback back to a Discord
+account"*. Under the device grant there is **no inbound request at all** — we mint the `device_code`
+per member, DM its link only to that member, and poll outbound. The Discord↔Spotify binding is ours
+by construction; there is no endpoint for anyone else to hit.
+
+**Consequences:**
+
+1. `music/callback_server.py`, the nginx `spotify-callback` vhost and `SPOTIFY_REDIRECT_URL` stay
+   dead — now permanently, not pending a retest.
+2. `music/spotify_auth.py` loses PKCE, `build_auth_url()`, `exchange_code()` and `REDIRECT_URI`,
+   and gains `start_device_authorization()` / `poll_device_token()`.
+3. `music/oauth_flow.py` becomes a device-code store; `music/commands.py` owns the polling loop.
+   `main.py` no longer inspects every DM for something that looks like a pasted URL.
+4. **Respect Spotify's `interval`** (5s) and lengthen it on `slow_down`. Polling faster gets the
+   authorization hard-failed.
+5. `device_code` is the credential — never show it, never key anything user-visible on it. The
+   6-character `user_code` is the only half meant for a human.
 
 ### ⚠️ Keymaster ROTATES the refresh token on every refresh (found 2026-08-15)
 

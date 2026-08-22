@@ -3,10 +3,11 @@
 The flow, end to end:
 
     ,play  ->  in a voice channel?  ->  linked?
-                                          no  -> DM an auth link; user pastes
-                                                 the redirect URL back (see
-                                                 music/oauth_flow.py for why it
-                                                 cannot be automatic)
+                                          no  -> DM a pairing link, then poll
+                                                 Spotify until the user
+                                                 approves it (see
+                                                 music/oauth_flow.py for why
+                                                 there is no callback)
                                           yes -> join voice, spawn librespot,
                                                  attach its PCM to the voice
                                                  client
@@ -47,6 +48,7 @@ IDLE_TIMEOUT_SECONDS = int(os.environ.get("SPOTIFY_IDLE_TIMEOUT_SECONDS", "600")
 IDLE_CHECK_INTERVAL_SECONDS = 30
 
 _idle_tasks = {}  # str(member_id) -> asyncio.Task
+_link_tasks = {}  # str(member_id) -> asyncio.Task polling a pending link
 
 
 def _executor_call(loop, func, *args):
@@ -62,23 +64,121 @@ async def _dm(user, content):
         return False
 
 
-async def _send_link(message, auth_url):
-    body = (
+async def _send_link(user, pending):
+    """DM the pairing link. Returns False if their DMs are closed."""
+    return await _dm(user, (
         "**Link your Spotify account** " + PREMIUM_NOTICE + "\n\n"
-        "1. Open this link and authorize:\n" + auth_url + "\n\n"
-        "2. Your browser will then fail to load a `127.0.0.1:5588` page — "
-        "**that's expected**, nothing is supposed to be listening there.\n\n"
-        "3. Copy the **whole URL** out of your browser's address bar and paste "
-        "it back to me here in DM.\n\n"
+        "1. Open this link:\n" + pending["verification_uri_complete"] + "\n\n"
+        "2. Check it shows the code **" + pending["user_code"] + "**, then "
+        "approve it.\n\n"
+        "That's all — I'm watching for it and will pick it up automatically. "
+        "Nothing to copy or paste back.\n\n"
         "_You only have to do this once._"
+    ))
+
+
+def _start_link_watcher(client, user, pending):
+    """Poll this member's pending authorization until Spotify resolves it."""
+    member_id = str(user.id)
+    existing = _link_tasks.pop(member_id, None)
+    if existing is not None:
+        existing.cancel()
+    _link_tasks[member_id] = asyncio.ensure_future(_await_link(client, user, pending))
+
+
+def _cancel_link_watcher(member_id):
+    task = _link_tasks.pop(str(member_id), None)
+    if task is not None:
+        task.cancel()
+
+
+async def _await_link(client, user, pending):
+    """Poll Spotify until the user approves the link, declines, or runs out.
+
+    The poll cadence is Spotify's to set: `interval` between attempts, longer
+    after a slow_down. Polling faster gets the authorization hard-failed.
+    """
+    member_id = str(user.id)
+    generation = pending["generation"]
+    loop = asyncio.get_event_loop()
+    try:
+        while True:
+            interval = oauth_flow.poll_interval(member_id, generation)
+            if interval is None:
+                logger.info("Spotify link for member %s ran out before approval", member_id)
+                await _dm(user, "That Spotify link expired. Run `,play` for a fresh one.")
+                return
+            await asyncio.sleep(interval)
+
+            try:
+                status, creds, entry = await _executor_call(
+                    loop, oauth_flow.poll, member_id, generation)
+            except KeyError:
+                # Cancelled, or a newer ,play superseded us; that attempt owns
+                # the member now and must not be answered for.
+                return
+            except spotify_auth.DeviceAuthorizationError as exc:
+                if exc.reason == "access_denied":
+                    await _dm(user, "You declined the Spotify link. Run `,play` "
+                                    "again if you change your mind.")
+                else:
+                    await _dm(user, "That Spotify link expired. Run `,play` for a fresh one.")
+                return
+            except spotify_auth.SpotifyAuthError:
+                logger.exception("device authorization poll failed for member %s", member_id)
+                await _dm(user, "Spotify stopped responding while linking. Run "
+                                "`,play` to try again.")
+                return
+
+            if status == spotify_auth.GRANT_GRANTED:
+                await _complete_link(client, user, creds, entry)
+                return
+    except asyncio.CancelledError:
+        pass
+    except Exception:
+        logger.exception("Spotify link watcher crashed for member %s", member_id)
+    finally:
+        # Only clear our own slot -- a superseding watcher may already own it.
+        if _link_tasks.get(member_id) is asyncio.current_task():
+            _link_tasks.pop(member_id, None)
+
+
+async def _complete_link(client, user, credentials_json, pending):
+    """Persist approved credentials and, if they're still waiting, start playing."""
+    member_id = user.id
+
+    await spotifyStore.setLink(
+        member_id,
+        credentials=json.dumps(credentials_json),
+        scope=credentials_json.get("scope", ""),
     )
-    if await _dm(message.author, body):
-        if message.guild is not None:
-            await message.channel.send("Check your DMs — I've sent you a Spotify link.")
-    else:
-        await message.channel.send(
-            "I couldn't DM you (your DMs may be closed). Open them and run `,play` again."
-        )
+    logger.info("linked Spotify for member %s", member_id)
+
+    guild = client.get_guild(pending["guild_id"]) if pending.get("guild_id") else None
+    voice_channel = (guild.get_channel(pending["voice_channel_id"])
+                     if guild and pending.get("voice_channel_id") else None)
+    member = guild.get_member(member_id) if guild else None
+
+    # Only auto-join if they're still where they started -- checked live, not
+    # trusted from the pending record.
+    still_there = (
+        member is not None and member.voice is not None
+        and member.voice.channel is not None and voice_channel is not None
+        and member.voice.channel.id == voice_channel.id
+    )
+    if not still_there:
+        await _dm(user, "Spotify linked. Hop into a voice channel and run "
+                        "`,play` to get started.")
+        return
+
+    error = await _start_session(client, member_id, voice_channel)
+    if error:
+        await _dm(user, "Spotify linked, but " + error[0].lower() + error[1:])
+        return
+
+    await _dm(user, "Spotify linked, and I've joined **%s**. Open Spotify and "
+                    "pick **%s** as your device to start playing."
+                    % (voice_channel.name, DEVICE_NAME))
 
 
 async def _stop_session(member_id, guild=None, client=None):
@@ -102,10 +202,10 @@ async def _stop_session(member_id, guild=None, client=None):
     credentials.forget(member_id)
 
 
-async def _start_session(client, message, voice_channel):
+async def _start_session(client, member_id, voice_channel):
     """Join voice and bring up this member's Connect device. Returns an error
     string for the user, or None on success."""
-    member_id = str(message.author.id)
+    member_id = str(member_id)
     loop = asyncio.get_event_loop()
 
     started = time.monotonic()
@@ -201,13 +301,29 @@ async def handle_play(message: discord.Message, client: discord.Client):
     loop = asyncio.get_event_loop()
 
     if link is None or credentials.needs_relink(link["credentials"]):
-        auth_url = await _executor_call(
-            loop, oauth_flow.start_link, message.author.id,
-            message.guild.id, voice_channel.id)
-        await _send_link(message, auth_url)
+        try:
+            pending = await _executor_call(
+                loop, oauth_flow.start_link, message.author.id,
+                message.guild.id, voice_channel.id)
+        except spotify_auth.SpotifyAuthError:
+            logger.exception("could not start a device authorization for member %s",
+                             message.author.id)
+            await message.channel.send(
+                "Spotify wouldn't start the link just now. Try `,play` again in a moment.")
+            return
+
+        if await _send_link(message.author, pending):
+            _start_link_watcher(client, message.author, pending)
+            if message.guild is not None:
+                await message.channel.send("Check your DMs — I've sent you a Spotify link.")
+        else:
+            oauth_flow.cancel(message.author.id)
+            await message.channel.send(
+                "I couldn't DM you (your DMs may be closed). Open them and run `,play` again."
+            )
         return
 
-    error = await _start_session(client, message, voice_channel)
+    error = await _start_session(client, message.author.id, voice_channel)
     if error:
         await message.channel.send(error)
         return
@@ -223,6 +339,7 @@ async def handle_spotify(message: discord.Message, client: discord.Client):
     if len(parts) >= 2 and parts[1] == "unlink":
         guild = message.guild
         await _stop_session(message.author.id, guild=guild, client=client)
+        _cancel_link_watcher(message.author.id)
         oauth_flow.cancel(message.author.id)
         deleted = await spotifyStore.deleteLink(message.author.id)
         if deleted:
@@ -231,67 +348,3 @@ async def handle_spotify(message: discord.Message, client: discord.Client):
             await message.channel.send("You don't have a linked Spotify account.")
         return
     await message.channel.send("Usage: `,spotify unlink`")
-
-
-async def handle_spotify_pasteback(message: discord.Message, client: discord.Client):
-    """DM handler: the user pastes the redirect URL they were sent to."""
-    loop = asyncio.get_event_loop()
-    member_id = message.author.id
-
-    try:
-        credentials_json, pending = await _executor_call(
-            loop, oauth_flow.complete_link, member_id, message.content)
-    except KeyError as exc:
-        await message.channel.send(
-            "I don't have a link in progress for you (%s). Run `,play` in a "
-            "server to start one." % exc)
-        return
-    except spotify_auth.SpotifyAuthError:
-        logger.exception("code exchange failed for member %s", member_id)
-        await message.channel.send(
-            "Spotify wouldn't accept that code. Make sure you pasted the whole "
-            "URL from the address bar, or run `,play` again for a fresh link."
-        )
-        return
-
-    await spotifyStore.setLink(
-        member_id,
-        credentials=json.dumps(credentials_json),
-        scope=credentials_json.get("scope", ""),
-    )
-
-    guild = client.get_guild(pending["guild_id"]) if pending.get("guild_id") else None
-    voice_channel = (guild.get_channel(pending["voice_channel_id"])
-                     if guild and pending.get("voice_channel_id") else None)
-    member = guild.get_member(member_id) if guild else None
-
-    # Only auto-join if they're still where they started -- checked live, not
-    # trusted from the pending record.
-    still_there = (
-        member is not None and member.voice is not None
-        and member.voice.channel is not None and voice_channel is not None
-        and member.voice.channel.id == voice_channel.id
-    )
-    if not still_there:
-        await message.channel.send(
-            "Spotify linked. Hop into a voice channel and run `,play` to get started."
-        )
-        return
-
-    error = await _start_session(client, message, voice_channel)
-    if error:
-        await message.channel.send("Spotify linked, but " + error[0].lower() + error[1:])
-        return
-
-    await message.channel.send(
-        "Spotify linked, and I've joined **%s**. Open Spotify and pick **%s** "
-        "as your device to start playing." % (voice_channel.name, DEVICE_NAME)
-    )
-
-
-def has_pending_spotify_link(user_id):
-    return oauth_flow.has_pending(user_id)
-
-
-def looks_like_paste_back(content):
-    return oauth_flow.looks_like_paste_back(content)

@@ -47,8 +47,7 @@ from commands.gym import handleDailyGym, handleGymOptIn, sendGymMessage, handleG
 from commands.gameSubscription import subscribe, checkGameVersions
 from helpers.reminders import handleReminderCheck, addReminder,handleReminderAdd
 from commands.automagic import automagic
-from music.commands import (handle_play, handle_spotify, handle_spotify_pasteback,
-                            has_pending_spotify_link, looks_like_paste_back)
+from music.commands import handle_play, handle_spotify
 
 import logging
 
@@ -67,12 +66,6 @@ async def on_message(message: discord.Message):
             await choices(message=message, client=client)
         elif message.content.startswith(",choices") or message.content.startswith("choices"):
             await saveChoices(message=message)
-        elif has_pending_spotify_link(message.author.id) and looks_like_paste_back(message.content):
-            # The Spotify link flow ends with the user pasting the redirect URL
-            # back here -- keymaster's only redirect is the user's own
-            # localhost, so no callback we host can catch it. See
-            # music/oauth_flow.py.
-            await handle_spotify_pasteback(message=message, client=client)
         return
     arr = []
     for match in re.finditer("https?\:\S+\.(png)|https?\:\S+\.(jpg)|https?\:\S+\.(jpeg)|https?\:\S+\.(gif)", message.content):
