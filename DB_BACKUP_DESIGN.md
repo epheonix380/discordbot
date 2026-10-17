@@ -1,8 +1,20 @@
 # Weekly DB backups to Google Drive — design (draft)
 
-Status: **preliminary design**, nothing implemented yet. Drive API credentials
-are not set up; everything Drive-specific below is the planned shape and will be
-confirmed once they are.
+Status: **design, decisions agreed**. Nothing implemented yet. Drive API
+credentials are not set up; the Drive-specific parts below are the planned
+shape and will be confirmed once they are.
+
+## 0. Decisions so far
+
+| Question | Decision |
+|---|---|
+| Google account | **Personal** Gmail, so OAuth user credentials, not a service account (§5) |
+| Encryption | **None.** The backup holds no PII, *provided* secrets are excluded (§3) |
+| Secrets | **Never backed up.** Spotify auth tokens and other credentials are left out of the dump (§3) |
+| Schedule | Weekly, **Sunday 04:00 UTC** |
+| Discord notifications | **Both** success and failure |
+| Local copy | **Yes.** Keep the newest dump on the host too |
+| DB size | Unknown. Measure before go-live: `sudo -u postgres psql -d discord_bot -c "SELECT pg_size_pretty(pg_database_size('discord_bot'));"` |
 
 ## 1. Requirements
 
@@ -13,6 +25,7 @@ confirmed once they are.
 | R3 | Keep only the 5 most recent backups in that folder. Uploading the 6th deletes the oldest. |
 | R4 | A failed run must never cost us a good backup, and must not go unnoticed. |
 | R5 | Backups must not affect the running bot (see `CLAUDE.md`: one instance, gateway heartbeat, self-healing DB). |
+| R6 | Only non-sensitive user and server data is backed up. Credentials and auth tokens never leave the host. |
 
 5 weekly backups give ~5 weeks of history.
 
@@ -41,13 +54,63 @@ Why:
 - A dump of a big table plus an upload would block or slow the bot's event loop
   and DB connections. Running it outside the container avoids that.
 
-## 3. Components
+## 3. What gets backed up (R6)
+
+### Excluded: table data that holds secrets
+
+`pg_dump` can leave out a whole table's **rows** while still dumping its
+**structure** (`--exclude-table-data`). It cannot leave out a single column. So
+any table that holds a secret has all of its rows left out. A restored database
+still has these tables, just empty.
+
+| Table | Why excluded | Effect after a restore |
+|---|---|---|
+| `storage_spotifylink` | `credentials` is each member's Spotify OAuth token blob (`helpers/spotifyStore.py`, `music/credentials.py`) | Members run `,spotify` again to re-link |
+| `auth_user` | Django password hashes | Re-create the admin user with `createsuperuser` if it's ever needed |
+| `auth_user_groups`, `auth_user_user_permissions`, `django_admin_log` | Foreign keys to `auth_user`. Their rows would fail to restore without it | None in practice |
+| `django_session` | Session keys, which are login tokens | None. The bot has no web sessions |
+
+Everything else is dumped in full: guilds, channels, members, activity stats,
+reminders, playlists, games, time zones, choice lists, and so on. Plus all
+schema and migration history (`django_migrations`), so a restore lines up with
+the code.
+
+### Fail closed on new tables
+
+A denylist alone fails open. If someone later adds, say, a `storage_twitchlink`
+holding tokens, it would be uploaded silently. To prevent that, the script holds
+**two lists**:
+
+- `EXCLUDE_DATA`: the tables above.
+- `INCLUDE`: every other table that exists today, each one checked as non-sensitive.
+
+Before dumping, the script reads the live table list
+(`SELECT tablename FROM pg_tables WHERE schemaname='public'`). **If a table
+appears in neither list, the run fails before anything is uploaded**, and posts
+to Discord: "new table `storage_xyz` is not classified. Add it to INCLUDE or
+EXCLUDE_DATA in `discordbot-backup.py`." Classifying a new table is then a
+one-line, deliberate change.
+
+### Post-dump check
+
+After dumping, `pg_restore --list` is scanned. If any excluded table shows a
+`TABLE DATA` entry, the run is aborted and the file deleted. This checks the
+output itself, not just the flags we passed to `pg_dump`.
+
+### Developer rule (to add to `CLAUDE.md` §8 on implementation)
+
+> A new model that stores a token, password, API key or OAuth credential must be
+> added to `EXCLUDE_DATA` in `deploy/discordbot-backup.py`. A new model that
+> doesn't must be added to `INCLUDE`. The weekly backup refuses to run until
+> every table is classified.
+
+## 4. Components
 
 ```
 deploy/
-  discordbot-backup.py         # the job: dump -> verify -> (encrypt) -> upload -> prune -> report
+  discordbot-backup.py         # dump -> verify -> keep local -> upload -> prune -> report
   discordbot-backup.service    # Type=oneshot, EnvironmentFile=/root/discordbot/.env (+ backup env)
-  discordbot-backup.timer      # OnCalendar weekly, Persistent=true
+  discordbot-backup.timer      # OnCalendar Sun 04:00 UTC, Persistent=true
 ```
 
 Installed the same way as the watchdog/monitor: script to `/usr/local/bin/`, units to
@@ -59,45 +122,57 @@ Host-only state (never in git):
 |---|---|---|
 | `/opt/discordbot-backup/venv/` | `google-api-python-client`, `google-auth`, `google-auth-oauthlib` | root |
 | `/etc/discordbot-backup/token.json` | Drive OAuth refresh token | `0600 root` |
-| `/etc/discordbot-backup/backup.env` | Folder ID, retention, encryption recipient | `0600 root` |
-| `/var/lib/discordbot-backup/` | Staging dir for the dump being uploaded; `last_success` timestamp | `0700 root` |
+| `/etc/discordbot-backup/backup.env` | Folder ID, retention | `0600 root` |
+| `/var/lib/discordbot-backup/staging/` | The dump being built and uploaded | `0700 root` |
+| `/var/lib/discordbot-backup/latest/` | The newest verified dump (local copy, exactly 1 file) | `0700 root` |
+| `/var/lib/discordbot-backup/last_success` | Timestamp of the last fully successful run | root |
+
+The local copy lives under `/var/lib`, not the repo's `backups/` directory.
+`backups/` holds the migration-era plaintext `.env` and a full dump, and
+shouldn't be mixed with routine output.
 
 ### Timer
 
 ```ini
 [Timer]
-OnCalendar=Sun *-*-* 04:00:00     # weekly; pick a quiet hour
+OnCalendar=Sun *-*-* 04:00:00 UTC
 Persistent=true                   # missed while the host was off -> run at next boot
 RandomizedDelaySec=15min
 Unit=discordbot-backup.service
 ```
 
-## 4. One run, step by step
+## 5. One run, step by step
 
 ```
-lock ──> dump ──> verify ──> encrypt? ──> upload ──> verify upload ──> prune ──> record + report
-                                                         │
-                         any failure before this point ──┴──> abort, NO pruning, alert
+lock ─> classify tables ─> dump ─> verify ─> keep local copy ─> upload ─> verify upload ─> prune ─> report
+              │               │        │                           │            │
+              └───────────────┴────────┴── any failure ────────────┴────────────┴─> abort, NO pruning, alert
 ```
 
 1. **Lock.** `flock` on `/var/lib/discordbot-backup/.lock` so a manual run and the
    timer can't overlap.
-2. **Dump.**
-   `pg_dump --format=custom --compress=9 --no-owner --dbname="$DATABASE_URL" -f <staging>/<name>.dump`
+2. **Classify tables** (§3). Fail if any table is unclassified.
+3. **Dump.**
+   ```
+   pg_dump --format=custom --compress=9 --no-owner \
+           --exclude-table-data=<each EXCLUDE_DATA table> \
+           --dbname="$DATABASE_URL" -f staging/<name>.dump
+   ```
    Custom format is compressed, and `pg_restore` can restore it selectively (one
    table, or schema only). Credentials come from `DATABASE_URL` in the existing
    `.env`, so there's no second copy of the DB password.
-3. **Verify the dump locally.** `pg_restore --list <file>` must succeed and list
-   a nonzero number of `TABLE DATA` entries. This catches empty or truncated
-   dumps, and also catches us dumping the empty sqlite-era DB by mistake (see
-   the `ENVIRONMENT` failure mode in `CLAUDE.md`).
-4. **Encrypt (recommended, see §7).** `age -r <public key> -o <name>.dump.age`.
-5. **Upload** into the backup folder with a resumable upload. On the Drive file, set:
-   - `name`: `discordbot-db-2026-10-18T040000Z.dump.age` (sortable UTC timestamp)
+4. **Verify the dump.** `pg_restore --list` must succeed, list a nonzero number
+   of `TABLE DATA` entries, and show **no** data for excluded tables. This also
+   catches dumping the empty sqlite-era DB by mistake (see the `ENVIRONMENT`
+   failure mode in `CLAUDE.md`).
+5. **Keep the local copy.** Copy into `latest/`, replacing the previous one. This
+   happens before the upload, so a Drive outage still leaves a fresh local backup.
+6. **Upload** into the backup folder with a resumable upload. On the Drive file, set:
+   - `name`: `discordbot-db-2026-10-18T040000Z.dump` (sortable UTC timestamp)
    - `appProperties`: `{"discordbot_backup": "1", "backup_ts": "<ISO UTC>"}`
-6. **Verify the upload.** Compare the `md5Checksum` that Drive returns with the
+7. **Verify the upload.** Compare the `md5Checksum` that Drive returns with the
    local file's MD5. If they differ, delete the uploaded copy and fail the run.
-7. **Prune (R3).** Runs only if steps 2–6 all succeeded.
+8. **Prune (R3).** Runs only if steps 2–7 all succeeded.
    - List files in the folder where `appProperties has {key='discordbot_backup' and value='1'}`
      and `trashed = false`.
    - Sort by `backup_ts` descending, then keep the first `KEEP=5`.
@@ -106,8 +181,9 @@ lock ──> dump ──> verify ──> encrypt? ──> upload ──> verify 
    - Guard: if the list doesn't include the file we just uploaded, don't delete
      anything and raise an alert. This means the listing is wrong, and acting on
      it could delete good backups.
-8. **Clean up and record.** Delete the local staging file, write `last_success`,
-   and log the outcome: size, duration, Drive file ID, number of files pruned.
+9. **Clean up and report.** Empty `staging/` and write `last_success`. Post a
+   success line to Discord (§7) and log the same: size, duration, Drive file ID,
+   number of files pruned.
 
 ### Why prune only after a verified upload
 
@@ -121,21 +197,27 @@ The pruner only deletes files that the backup job itself created and tagged. If
 someone drops a manual export or a note into the folder, it doesn't count toward
 the 5 and is never deleted.
 
-## 5. Google Drive specifics (to confirm when credentials arrive)
+### Disk use on the host
 
-- **Auth: OAuth user credentials with a refresh token. A service account won't
-  work if this is a personal Google account.** Since 2025, service accounts have
-  no storage quota of their own, and uploading into a personal "My Drive" folder
-  shared with one fails with `storageQuotaExceeded`. A service account only works
-  with a **Shared Drive**, which needs Google Workspace. Personal account: an
-  OAuth "Desktop app" client, one consent on a machine with a browser, and the
-  saved refresh token copied to the host.
+At peak, about 2× the compressed dump: the staging file plus the previous
+`latest/` copy. Measure the DB size (§0) before go-live. The host is small
+(2 cores / 3 GB RAM), so if the dump turns out large, revisit this.
+
+## 6. Google Drive specifics (to confirm when credentials arrive)
+
+- **Auth: OAuth "Desktop app" client with a refresh token.** This is a personal
+  account, and since 2025 service accounts have no storage quota of their own:
+  uploading into a personal "My Drive" folder shared with one fails with
+  `storageQuotaExceeded`. Setup is one consent in a browser on any machine, then
+  the saved `token.json` is copied to the host. A helper (`--authorize`) will do
+  the consent step.
 - **Scope: `https://www.googleapis.com/auth/drive.file`.** The app can only see
   and delete files and folders that it created. Even a buggy prune can't touch
   anything else in the Drive. Consequence: **the backup job creates the folder
   itself.** A one-time `--init` step finds or creates `discordbot-db-backups` and
   writes its ID into `backup.env`. A folder made by hand in the Drive UI would be
-  invisible to the job.
+  invisible to the job. You can move or rename that folder in Drive afterwards;
+  the job tracks it by ID.
 - **Publish the OAuth consent screen ("In production").** In "Testing" status,
   Google expires refresh tokens after **7 days**, which is exactly the backup
   interval. Every weekly run would hit a dead token. `drive.file` is a
@@ -146,51 +228,44 @@ the 5 and is never deleted.
   twice the storage. `files.delete` removes the file permanently, which matches
   the "keep only 5" rule.
 - Expired or revoked tokens show up as `invalid_grant`. The job reports this as
-  its own alert ("Drive auth broken, re-run consent") instead of a generic failure.
+  its own alert ("Drive auth broken, re-run `--authorize`") instead of a generic
+  failure.
 
-## 6. Failure visibility (R4)
+**What I'll need from you when we get there:** a Google Cloud project with the
+Drive API enabled, plus an OAuth client of type *Desktop app* (`client_secret.json`),
+with its consent screen set to *In production*. I can write step-by-step setup
+instructions for this when we start implementing.
 
-Reuse what already exists rather than adding a new channel:
+## 7. Notifications and failure visibility (R4)
 
-- **Alert on failure.** Post to `ALERT_CHANNEL_ID` through the Discord REST API
-  with the bot token, the same way `deploy/discordbot_monitor.py` does. That
-  works even when the bot is down. Optionally post a short success line too
-  ("backup 2026-10-18 ok, 4.2 MB, 5 kept").
+Reuse what already exists rather than adding a new channel: post to
+`ALERT_CHANNEL_ID` through the Discord REST API with the bot token, the same way
+`deploy/discordbot_monitor.py` does. That works even when the bot is down.
+
+- **Success:** `✅ DB backup 2026-10-18 ok: 4.2 MB, uploaded in 12s, 5 kept on Drive (pruned 1)`
+- **Failure:** `❌ DB backup failed at <step>: <error>`, followed by "existing
+  backups untouched" when pruning was skipped.
 - **Staleness check.** Add one check to `discordbot_monitor.py`: if
-  `/var/lib/discordbot-backup/last_success` is older than **8 days**, alert. This
-  catches the failure where the job never ran at all: timer disabled, unit file
-  missing, host clock wrong. An alert on a failed run can't catch that.
+  `last_success` is older than **8 days**, alert. This catches the failure where
+  the job never ran at all: timer disabled, unit file missing, host clock wrong.
+  An alert on a failed run can't catch that.
 - Everything goes to the journal as well: `journalctl -u discordbot-backup`.
-
-## 7. Security
-
-- The dump contains all bot data (guild/user IDs, stored user content, Spotify
-  data if any), and it ends up on a third-party service. **Recommendation: encrypt
-  before upload with `age`.** Only the public key lives on the host. The private
-  key stays offline, e.g. in a password manager. If the Google account is
-  compromised, the attacker gets encrypted blobs, and a compromised host can
-  write backups but not read old ones.
-  Trade-off: **lose the private key and you lose every backup.** This is a
-  decision for you (see open questions).
-- `token.json` and `backup.env` are `0600 root`, outside the repo, and never
-  under `backups/` (that directory already holds a plaintext `.env` copy).
-- No secrets on the command line: `pg_dump` gets its credentials through
-  `DATABASE_URL`/`PGPASSWORD` in its environment, not in `argv`.
 
 ## 8. Restore runbook (draft)
 
-1. Download the wanted file from the Drive folder (UI, or `discordbot-backup.py --fetch <name>`).
-2. `age -d -i key.txt -o restore.dump file.dump.age`
-3. **Restore into a scratch DB first:**
-   `createdb discord_bot_restore && pg_restore --no-owner -d discord_bot_restore restore.dump`
+1. Take the file from `/var/lib/discordbot-backup/latest/`, or download one from
+   the Drive folder (UI, or `discordbot-backup.py --fetch <name>`).
+2. **Restore into a scratch DB first:**
+   `createdb discord_bot_restore && pg_restore --no-owner -d discord_bot_restore file.dump`
    and check row counts.
-4. To make it live: `touch /run/discordbot.maintenance`, `docker compose down`,
+3. To make it live: `touch /run/discordbot.maintenance`, `docker compose down`,
    rename the DBs (or `pg_restore --clean` into `discord_bot`), `docker compose up -d`,
    `rm /run/discordbot.maintenance`.
+4. After the restore: Spotify links and Django users are empty (§3). Members
+   re-link with `,spotify`.
 
 A backup that has never been restored is only assumed to work. Suggestion: do one
 manual end-to-end restore right after go-live, then a quick one occasionally.
-Automated restore tests can come later.
 
 ## 9. Configuration (`backup.env`)
 
@@ -198,25 +273,22 @@ Automated restore tests can come later.
 |---|---|---|
 | `BACKUP_DRIVE_FOLDER_ID` | — (set by `--init`) | Target folder |
 | `BACKUP_KEEP` | `5` | Backups retained on Drive |
-| `BACKUP_AGE_RECIPIENT` | — | `age` public key; unset = no encryption |
 | `BACKUP_TOKEN_FILE` | `/etc/discordbot-backup/token.json` | OAuth token |
-| `BACKUP_STAGING_DIR` | `/var/lib/discordbot-backup` | Local temp |
-| `BACKUP_ALERT_ON_SUCCESS` | `0` | Also post success lines to Discord |
+| `BACKUP_STATE_DIR` | `/var/lib/discordbot-backup` | Staging, local copy, `last_success` |
+| `BACKUP_NOTIFY_SUCCESS` | `1` | Post success lines to Discord |
 
 `DATABASE_URL`, `TOKEN` and `ALERT_CHANNEL_ID` come from the existing `/root/discordbot/.env`.
+The table lists (§3) are kept in the script, under version control, not in env,
+so changing what gets backed up goes through a commit.
 
-CLI: `discordbot-backup.py [--init | --dry-run | --list | --fetch NAME]`.
-`--dry-run` dumps and verifies, then prints what it would upload and prune,
-without touching Drive.
+CLI: `discordbot-backup.py [--authorize | --init | --dry-run | --list | --fetch NAME]`.
+`--dry-run` classifies tables, dumps and verifies, then prints what it would
+upload and prune, without touching Drive.
 
-## 10. Open questions
+## 10. Open items
 
-1. **Google account type:** personal Gmail or Workspace? This decides between
-   OAuth with a refresh token and a service account with a Shared Drive (§5).
-2. **Encrypt with `age`?** Recommended. If yes, where will the private key be kept?
-3. **DB size today?** This is for staging disk on a small host and upload time.
-   (`SELECT pg_size_pretty(pg_database_size('discord_bot'));`)
-4. **Day and time:** Sunday 04:00 UTC OK?
-5. **Success notifications in Discord**, or only failures?
-6. Should the **local `backups/`** directory also keep the latest dump, as a
-   second copy that doesn't depend on Drive?
+1. **DB size**: run the query in §0 on the host.
+2. **Drive API credentials**: the OAuth client from §6, when you're ready.
+3. **Confirm the table classification against production.** The lists in §3 come
+   from `storage/models.py` and Django's built-in apps. `--dry-run` on the host
+   will flag any table in the live DB that the code doesn't know about.
